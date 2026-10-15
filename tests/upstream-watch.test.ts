@@ -248,13 +248,16 @@ describe('subscription review and local lifecycle', () => {
     const key = f.watch.snapshot().report!.key;
     expect(() => f.watch.decide('stale', 'update', ['credentials'], '')).toThrow();
     expect(() => f.watch.decide(key, 'update', ['../secret'], '')).toThrow();
-    f.watch.decide(key, 'update', ['credentials', 'subscription'], 'PRIVATE-LOCAL-NOTE');
+    f.watch.decide(key, 'update', ['credentials', 'subscription', 'computerUse'], 'PRIVATE-LOCAL-NOTE');
     const request = f.watch.request()!;
     expect(request.path.startsWith(join(f.dir, 'requests'))).toBe(true);
     expect(request.text).toContain('PRIVATE-LOCAL-NOTE');
     expect(request.text).toContain(upstreamText('zh-Hant').featureNames.credentials);
+    expect(request.text).toContain(upstreamText('zh-Hant').featureNames.computerUse);
     expect(request.text).not.toContain(`- ${upstreamText('zh-Hant').featureNames.models}`);
-    expect(request.text).toContain('禁止 push');
+    expect(request.text).toContain('完成測試、憑證與私人資訊審核後');
+    expect(request.text).toContain('備份到自己的 fork');
+    expect(request.text).toContain('禁止 push 至上游、PR');
     await f.watch.check(true); expect(f.sent).toHaveLength(1);
     expect(f.sent[0]).not.toContain('PRIVATE-LOCAL-NOTE');
   });

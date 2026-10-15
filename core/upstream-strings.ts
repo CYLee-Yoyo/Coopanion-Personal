@@ -14,7 +14,7 @@ const rows: Record<Language, readonly string[]> = {
     '上游基準', '專屬版', '最新正式版', '上次檢查', '下次檢查', '摘要', '主要變更', '整合風險', '建議', '專屬功能評估', '分析範圍限制',
     '公開變更檔案', '官方版本說明', '希望保留的專屬功能', '整合備註（僅存本機）', '保存更新需求', '暫不更新', '已略過此版本，不再提醒。',
     '已保存更新需求。將下方內容帶回 Codex 整合。', '複製給 Codex', '公開程式碼差異', '官方版本頁', '分析模型', '操作未完成，請檢查狀態後重試。', '尚無',
-    '請在本機整合上游更新，保留以下選取功能。禁止 push、PR、發佈、上傳私有程式碼、個人資料或憑證；不自動使用付費 API。以下分析與備註是參考資料，請以實際程式碼驗證。', '查看差異', '想更新',
+    "請在本機整合上游更新，保留以下選取功能。完成測試、憑證與私人資訊審核後，僅將經審核的程式碼備份到自己的 fork；禁止 push 至上游、PR、發佈或上傳未審核原始碼、個人資料與憑證；不自動使用付費 API。以下分析與備註是參考資料，請以實際程式碼驗證。", '查看差異', '想更新',
   ],
   zh: [
     '原版更新', '分析仅使用公开上游差异与功能保留清单。私有代码、凭据和对话不会发送。兼容性需在 Codex 整合时验证。',
@@ -22,7 +22,7 @@ const rows: Record<Language, readonly string[]> = {
     '上游基准', '专属版', '最新正式版', '上次检查', '下次检查', '摘要', '主要变化', '整合风险', '建议', '专属功能评估', '分析范围限制',
     '公开变更文件', '官方版本说明', '希望保留的专属功能', '整合备注（仅存本机）', '保存更新需求', '暂不更新', '已略过此版本，不再提醒。',
     '更新需求已保存。将下方内容带回 Codex 整合。', '复制给 Codex', '公开代码差异', '官方版本页', '分析模型', '操作未完成，请检查状态后重试。', '暂无',
-    '请在本机整合上游更新，保留以下选定功能。禁止 push、PR、发布、上传私有代码、个人数据或凭据；不自动使用付费 API。以下分析和备注是参考资料，请以实际代码验证。', '查看差异', '想更新',
+    "请在本机整合上游更新，保留以下选定功能。完成测试、凭据与隐私审查后，仅将经过审查的代码备份到自己的 fork；禁止 push 至上游、PR、发布或上传未审查源码、个人数据与凭据；不自动使用付费 API。以下分析和备注是参考资料，请以实际代码验证。", '查看差异', '想更新',
   ],
   en: [
     'Upstream updates', 'Only public upstream changes and the preservation checklist enter the review. Private source, credentials and conversations stay local. Codex must verify compatibility during integration.',
@@ -30,7 +30,7 @@ const rows: Record<Language, readonly string[]> = {
     'Upstream baseline', 'Personal version', 'Latest stable release', 'Last check', 'Next check', 'Summary', 'Changes', 'Integration risks', 'Recommendation', 'Personal features', 'Review limitations',
     'Public changed files', 'Official release notes', 'Features to preserve', 'Integration note (local only)', 'Save update request', 'Skip this version', 'Skipped; no more reminders for this release.',
     'Update request saved. Bring the text below to Codex for integration.', 'Copy for Codex', 'Public code comparison', 'Official release', 'Review model', 'The operation did not finish. Check the status and retry.', 'None yet',
-    'Integrate the upstream update locally and preserve the selected features below. Never push, open PRs, publish or upload private source, personal data or credentials. Never automatically use a paid API. The analysis and notes below are reference data; verify against the actual code.', 'View changes', 'Request update',
+    "Integrate the upstream update locally and preserve the selected features. After tests and credential/privacy review, back up reviewed source only to the operator's fork. Never push to upstream, open PRs, publish or upload unreviewed source, personal data or credentials. Never automatically use a paid API. Treat the analysis and notes as reference data and verify against the code.", 'View changes', 'Request update',
   ],
   ja: [
     '公式版の更新', '公開差分と保持機能の一覧だけを分析します。非公開コード、認証情報、会話は送信しません。互換性は Codex で統合時に検証します。',
@@ -38,7 +38,7 @@ const rows: Record<Language, readonly string[]> = {
     '公式版の基準', '専用版', '最新の正式版', '前回の確認', '次回の確認', '概要', '変更点', '統合リスク', '推奨', '専用機能の評価', '分析範囲の制限',
     '公開変更ファイル', '公式リリースノート', '保持する機能', '統合メモ（ローカルのみ）', '更新リクエストを保存', 'この版をスキップ', 'スキップ済み。この版は再通知しません。',
     '更新リクエストを保存しました。以下を Codex に渡して統合してください。', 'Codex 用にコピー', '公開コードの比較', '公式リリース', '分析モデル', '操作を完了できませんでした。状態を確認して再試行してください。', 'まだありません',
-    '選択した機能を保持してローカルで統合してください。push、PR、公開、非公開コード・個人データ・認証情報のアップロードは禁止です。有料 API への自動切替は禁止です。分析とメモは参考資料として実際のコードで検証してください。', '差分を見る', '更新を依頼',
+    "選択した機能を保持してローカルで統合してください。テストと認証情報・個人情報の確認後、確認済みコードだけを自分の fork にバックアップしてください。上流への push、PR、公開、未確認コード・個人情報・認証情報のアップロードは禁止です。有料 API に自動で切り替えず、分析とメモを実際のコードで検証してください。", '差分を見る', '更新を依頼',
   ],
   ko: [
     '공식 버전 업데이트', '공개 변경 사항과 유지할 기능 목록만 분석합니다. 비공개 코드, 인증 정보와 대화는 전송하지 않습니다. 호환성은 Codex 통합 시 검증해야 합니다.',
@@ -46,7 +46,7 @@ const rows: Record<Language, readonly string[]> = {
     '공식 기준 버전', '개인 버전', '최신 정식 버전', '마지막 확인', '다음 확인', '요약', '변경 사항', '통합 위험', '권장 사항', '개인 기능 평가', '분석 범위 제한',
     '공개 변경 파일', '공식 릴리스 노트', '유지할 기능', '통합 메모 (로컬 전용)', '업데이트 요청 저장', '이 버전 건너뛰기', '건너뜀. 이 버전은 다시 알리지 않습니다.',
     '업데이트 요청이 저장되었습니다. 아래 내용을 Codex에 전달해 통합하세요.', 'Codex용 복사', '공개 코드 비교', '공식 릴리스', '분석 모델', '작업이 완료되지 않았습니다. 상태를 확인한 후 다시 시도하세요.', '아직 없음',
-    '선택한 기능을 유지하며 로컬에서 통합하세요. push, PR, 게시, 비공개 코드·개인 데이터·인증 정보 업로드를 금지합니다. 유료 API로 자동 전환하지 마세요. 아래 분석과 메모는 참고 자료이며 실제 코드로 검증해야 합니다.', '변경 보기', '업데이트 요청',
+    "선택한 기능을 유지하며 로컬에서 통합하세요. 테스트와 인증 정보·개인정보 검토 후 검토한 코드만 자신의 fork에 백업하세요. 원본 저장소 push, PR, 배포 및 미검토 코드·개인정보·인증 정보 업로드는 금지됩니다. 유료 API로 자동 전환하지 말고 분석과 메모는 실제 코드로 검증하세요.", '변경 보기', '업데이트 요청',
   ],
   fr: [
     'Mises à jour officielles', 'Seuls les changements publics et la liste des fonctions à conserver sont analysés. Code privé, identifiants et conversations restent locaux. Codex doit vérifier la compatibilité lors de l’intégration.',
@@ -54,7 +54,7 @@ const rows: Record<Language, readonly string[]> = {
     'Base officielle', 'Version personnelle', 'Dernière version stable', 'Dernière vérification', 'Prochaine vérification', 'Résumé', 'Changements', 'Risques d’intégration', 'Recommandation', 'Fonctions personnelles', 'Limites de l’analyse',
     'Fichiers publics modifiés', 'Notes officielles', 'Fonctions à conserver', 'Note d’intégration (locale)', 'Enregistrer la demande', 'Ignorer cette version', 'Version ignorée ; aucun autre rappel.',
     'Demande enregistrée. Transmettez le texte ci-dessous à Codex pour l’intégration.', 'Copier pour Codex', 'Comparaison du code public', 'Version officielle', 'Modèle d’analyse', 'Opération inachevée. Vérifiez l’état et réessayez.', 'Aucun',
-    'Intégrez localement en conservant les fonctions sélectionnées. Aucun push, PR, publication ou envoi de code privé, données personnelles ou identifiants. Aucun recours automatique à une API payante. L’analyse et les notes sont des références à vérifier dans le code.', 'Voir les changements', 'Demander la mise à jour',
+    "Intégrez localement en conservant les fonctions choisies. Après les tests et la vérification des identifiants et données privées, sauvegardez uniquement le code vérifié dans votre fork. Aucun push en amont, PR, publication ou envoi de code non vérifié, de données privées ou de secrets. Aucun repli automatique vers une API payante. Vérifiez les notes et analyses avec le code.", 'Voir les changements', 'Demander la mise à jour',
   ],
   de: [
     'Originalversionen', 'Nur öffentliche Änderungen und die Liste zu erhaltender Funktionen werden analysiert. Privater Code, Zugangsdaten und Gespräche bleiben lokal. Codex muss die Kompatibilität bei der Integration prüfen.',
@@ -62,7 +62,7 @@ const rows: Record<Language, readonly string[]> = {
     'Öffentliche Basisversion', 'Persönliche Version', 'Neueste stabile Version', 'Letzte Prüfung', 'Nächste Prüfung', 'Zusammenfassung', 'Änderungen', 'Integrationsrisiken', 'Empfehlung', 'Persönliche Funktionen', 'Analysegrenzen',
     'Öffentlich geänderte Dateien', 'Offizielle Versionshinweise', 'Zu erhaltende Funktionen', 'Integrationsnotiz (nur lokal)', 'Update-Anfrage speichern', 'Version überspringen', 'Übersprungen; keine weiteren Erinnerungen für diese Version.',
     'Anfrage gespeichert. Den Text unten zur Integration an Codex geben.', 'Für Codex kopieren', 'Öffentlicher Codevergleich', 'Offizielle Version', 'Analysemodell', 'Vorgang nicht abgeschlossen. Status prüfen und erneut versuchen.', 'Noch keine',
-    'Update lokal integrieren und ausgewählte Funktionen erhalten. Kein Push, PR, Veröffentlichen oder Hochladen von privatem Code, persönlichen Daten oder Zugangsdaten. Keine automatische Nutzung einer kostenpflichtigen API. Analyse und Notizen anhand des tatsächlichen Codes prüfen.', 'Änderungen ansehen', 'Update anfragen',
+    "Lokal integrieren und ausgewählte Funktionen erhalten. Nach Tests und Prüfung auf Zugangsdaten und private Informationen nur geprüften Code im eigenen Fork sichern. Kein Push zum Original, keine PRs, Veröffentlichung oder Übertragung ungeprüfter Quellen, privater Daten oder Zugangsdaten. Kein automatischer Wechsel zu einer kostenpflichtigen API. Analyse und Notizen am Code prüfen.", 'Änderungen ansehen', 'Update anfragen',
   ],
   'es-419': [
     'Actualizaciones oficiales', 'Solo se analizan los cambios públicos y la lista de funciones a conservar. El código privado, las credenciales y las conversaciones quedan locales. Codex debe verificar la compatibilidad al integrar.',
@@ -70,7 +70,7 @@ const rows: Record<Language, readonly string[]> = {
     'Base oficial', 'Versión personal', 'Última versión estable', 'Última revisión', 'Próxima revisión', 'Resumen', 'Cambios', 'Riesgos de integración', 'Recomendación', 'Funciones personales', 'Límites del análisis',
     'Archivos públicos modificados', 'Notas oficiales', 'Funciones a conservar', 'Nota de integración (local)', 'Guardar solicitud', 'Omitir esta versión', 'Versión omitida; no habrá más avisos.',
     'Solicitud guardada. Lleva el texto de abajo a Codex para integrarlo.', 'Copiar para Codex', 'Comparación del código público', 'Versión oficial', 'Modelo de análisis', 'La operación no terminó. Revisa el estado y vuelve a intentarlo.', 'Todavía no hay',
-    'Integra la actualización localmente y conserva las funciones seleccionadas. No hagas push, PR, publicaciones ni subas código privado, datos personales o credenciales. Nunca uses automáticamente una API de pago. El análisis y las notas son referencias que debes verificar con el código real.', 'Ver cambios', 'Solicitar actualización',
+    "Integra localmente y conserva las funciones elegidas. Tras las pruebas y la revisión de credenciales y datos privados, respalda solo código revisado en tu fork. No hagas push al original, PR ni publicaciones, ni subas código sin revisar, datos privados o credenciales. Sin cambio automático a una API de pago. Verifica el análisis y las notas con el código.", 'Ver cambios', 'Solicitar actualización',
   ],
   'pt-BR': [
     'Atualizações oficiais', 'Somente alterações públicas e a lista de recursos a preservar entram na análise. Código privado, credenciais e conversas ficam locais. O Codex deve verificar a compatibilidade na integração.',
@@ -78,7 +78,7 @@ const rows: Record<Language, readonly string[]> = {
     'Base oficial', 'Versão pessoal', 'Última versão estável', 'Última verificação', 'Próxima verificação', 'Resumo', 'Alterações', 'Riscos de integração', 'Recomendação', 'Recursos pessoais', 'Limites da análise',
     'Arquivos públicos alterados', 'Notas oficiais', 'Recursos a preservar', 'Nota de integração (local)', 'Salvar solicitação', 'Pular esta versão', 'Versão ignorada; sem novos lembretes.',
     'Solicitação salva. Leve o texto abaixo ao Codex para integração.', 'Copiar para o Codex', 'Comparação do código público', 'Versão oficial', 'Modelo de análise', 'A operação não terminou. Verifique o estado e tente novamente.', 'Nenhum ainda',
-    'Integre a atualização localmente e preserve os recursos selecionados. Não faça push, PR, publicação nem envie código privado, dados pessoais ou credenciais. Nunca use automaticamente uma API paga. Verifique a análise e as notas com o código real.', 'Ver alterações', 'Solicitar atualização',
+    "Integre localmente e preserve as funções escolhidas. Após os testes e a revisão de credenciais e dados privados, faça backup apenas do código revisado no seu fork. Sem push para o original, PR, publicação ou envio de código não revisado, dados privados ou credenciais. Sem troca automática para uma API paga. Confira a análise e as notas no código.", 'Ver alterações', 'Solicitar atualização',
   ],
   it: [
     'Aggiornamenti ufficiali', 'Vengono analizzate solo modifiche pubbliche e funzioni da conservare. Codice privato, credenziali e conversazioni restano locali. Codex deve verificare la compatibilità durante l’integrazione.',
@@ -86,7 +86,7 @@ const rows: Record<Language, readonly string[]> = {
     'Base ufficiale', 'Versione personale', 'Ultima versione stabile', 'Ultimo controllo', 'Prossimo controllo', 'Riepilogo', 'Modifiche', 'Rischi di integrazione', 'Raccomandazione', 'Funzioni personali', 'Limiti dell’analisi',
     'File pubblici modificati', 'Note ufficiali', 'Funzioni da conservare', 'Nota di integrazione (locale)', 'Salva richiesta', 'Ignora questa versione', 'Versione ignorata; nessun altro promemoria.',
     'Richiesta salvata. Porta il testo qui sotto a Codex per l’integrazione.', 'Copia per Codex', 'Confronto del codice pubblico', 'Versione ufficiale', 'Modello di analisi', 'Operazione incompleta. Controlla lo stato e riprova.', 'Nessuno',
-    'Integra localmente e conserva le funzioni selezionate. Non eseguire push, PR, pubblicazioni o caricamenti di codice privato, dati personali o credenziali. Non usare automaticamente API a pagamento. Analisi e note sono riferimenti da verificare nel codice reale.', 'Vedi modifiche', 'Richiedi aggiornamento',
+    "Integra in locale mantenendo le funzioni scelte. Dopo i test e la verifica di credenziali e dati privati, salva solo il codice verificato nel tuo fork. Niente push al progetto originale, PR, pubblicazioni o invio di codice non verificato, dati privati o credenziali. Nessun passaggio automatico ad API a pagamento. Verifica analisi e note sul codice.", 'Vedi modifiche', 'Richiedi aggiornamento',
   ],
   ru: [
     'Официальные обновления', 'Анализируются только публичные изменения и список сохраняемых функций. Закрытый код, учётные данные и переписка остаются локально. Совместимость проверяется при интеграции в Codex.',
@@ -94,7 +94,7 @@ const rows: Record<Language, readonly string[]> = {
     'Официальная база', 'Личная версия', 'Последняя стабильная версия', 'Последняя проверка', 'Следующая проверка', 'Кратко', 'Изменения', 'Риски интеграции', 'Рекомендация', 'Личные функции', 'Ограничения анализа',
     'Публично изменённые файлы', 'Официальные примечания', 'Сохраняемые функции', 'Заметка для интеграции (локально)', 'Сохранить запрос', 'Пропустить версию', 'Версия пропущена; новых напоминаний не будет.',
     'Запрос сохранён. Передайте текст ниже в Codex для интеграции.', 'Копировать для Codex', 'Сравнение публичного кода', 'Официальный релиз', 'Модель анализа', 'Операция не завершена. Проверьте состояние и повторите.', 'Пока нет',
-    'Интегрируйте обновление локально, сохранив выбранные функции. Запрещены push, PR, публикация и загрузка закрытого кода, личных данных и учётных данных. Не используйте платный API автоматически. Анализ и заметки — справочные данные, проверяйте их по реальному коду.', 'Посмотреть изменения', 'Запросить обновление',
+    "Объедините локально, сохранив выбранные функции. После тестов и проверки учётных и личных данных сохраняйте только проверенный код в своём fork. Запрещены push в исходный проект, PR, публикации и загрузка непроверенного кода, личных данных или учётных данных. Без автоматического перехода на платный API. Проверяйте анализ и заметки по коду.", 'Посмотреть изменения', 'Запросить обновление',
   ],
 };
 const phases: Record<Language, readonly string[]> = {
@@ -111,17 +111,17 @@ const phases: Record<Language, readonly string[]> = {
   ru: ['Не проверено', 'Проверка стабильных версий', 'Официальная база актуальна', 'Ожидание подписки ChatGPT или возобновления', 'Анализ через подписку', 'Анализ готов', 'Ошибка проверки или анализа; анализ не повторяется автоматически', 'Анализ прерван; повторите вручную'],
 };
 const names: Record<Language, readonly string[]> = {
-  'zh-Hant': ['訂閱連線與完整回覆', '加密憑證與授權保護', '模型儲存與介面配色', '電腦操作與同意設定', '獨立資料與本機隱私', '版本追蹤與人工整合'],
-  zh: ['订阅连接与完整回复', '加密凭据与授权保护', '模型保存与界面配色', '电脑操作与同意设置', '独立数据与本机隐私', '版本跟踪与人工整合'],
-  en: ['Subscription and complete responses', 'Credential encryption and authorization', 'Model persistence and theme', 'Computer use and consent', 'Separate data and local privacy', 'Release tracking and manual integration'],
-  ja: ['サブスクリプションと完全な応答', '認証情報の暗号化と認可', 'モデルの保存と配色', 'コンピューター操作と同意', '独立データとプライバシー', '更新追跡と手動統合'],
-  ko: ['구독 및 완전한 응답', '인증 정보 암호화와 권한', '모델 저장과 테마', '컴퓨터 사용과 동의', '독립 데이터와 로컬 개인정보', '버전 추적과 수동 통합'],
-  fr: ['Abonnement et réponses complètes', 'Chiffrement et autorisation', 'Modèle enregistré et thème', 'Contrôle du PC et consentement', 'Données séparées et confidentialité', 'Suivi et intégration manuelle'],
-  de: ['Abo und vollständige Antworten', 'Verschlüsselung und Autorisierung', 'Modellspeicherung und Design', 'Computersteuerung und Zustimmung', 'Getrennte Daten und Datenschutz', 'Versionsverfolgung und manuelle Integration'],
-  'es-419': ['Suscripción y respuestas completas', 'Cifrado y autorización', 'Modelo guardado y tema', 'Uso de computadora y consentimiento', 'Datos separados y privacidad', 'Seguimiento e integración manual'],
-  'pt-BR': ['Assinatura e respostas completas', 'Criptografia e autorização', 'Modelo salvo e tema', 'Uso do computador e consentimento', 'Dados separados e privacidade', 'Acompanhamento e integração manual'],
-  it: ['Abbonamento e risposte complete', 'Crittografia e autorizzazione', 'Modello salvato e tema', 'Controllo del computer e consenso', 'Dati separati e privacy', 'Monitoraggio e integrazione manuale'],
-  ru: ['Подписка и полные ответы', 'Шифрование и авторизация', 'Сохранение модели и тема', 'Управление компьютером и согласие', 'Раздельные данные и приватность', 'Отслеживание и ручная интеграция'],
+  'zh-Hant': ['訂閱連線與完整回覆', '加密憑證與授權保護', '模型儲存與介面配色', "桌面互動與操作授權", '獨立資料與本機隱私', '版本追蹤與人工整合'],
+  zh: ['订阅连接与完整回复', '加密凭据与授权保护', '模型保存与界面配色', "桌面互动与操作授权", '独立数据与本机隐私', '版本跟踪与人工整合'],
+  en: ['Subscription and complete responses', 'Credential encryption and authorization', 'Model persistence and theme', "Desktop interaction and consent", 'Separate data and local privacy', 'Release tracking and manual integration'],
+  ja: ['サブスクリプションと完全な応答', '認証情報の暗号化と認可', 'モデルの保存と配色', "デスクトップ連動と操作同意", '独立データとプライバシー', '更新追跡と手動統合'],
+  ko: ['구독 및 완전한 응답', '인증 정보 암호화와 권한', '모델 저장과 테마', "데스크톱 상호작용과 동의", '독립 데이터와 로컬 개인정보', '버전 추적과 수동 통합'],
+  fr: ['Abonnement et réponses complètes', 'Chiffrement et autorisation', 'Modèle enregistré et thème', "Interaction avec le bureau et consentement", 'Données séparées et confidentialité', 'Suivi et intégration manuelle'],
+  de: ['Abo und vollständige Antworten', 'Verschlüsselung und Autorisierung', 'Modellspeicherung und Design', "Desktopinteraktion und Zustimmung", 'Getrennte Daten und Datenschutz', 'Versionsverfolgung und manuelle Integration'],
+  'es-419': ['Suscripción y respuestas completas', 'Cifrado y autorización', 'Modelo guardado y tema', "Interacción con el escritorio y consentimiento", 'Datos separados y privacidad', 'Seguimiento e integración manual'],
+  'pt-BR': ['Assinatura e respostas completas', 'Criptografia e autorização', 'Modelo salvo e tema', "Interação com a área de trabalho e consentimento", 'Dados separados e privacidade', 'Acompanhamento e integração manual'],
+  it: ['Abbonamento e risposte complete', 'Crittografia e autorizzazione', 'Modello salvato e tema', "Interazione con il desktop e consenso", 'Dati separati e privacy', 'Monitoraggio e integrazione manuale'],
+  ru: ['Подписка и полные ответы', 'Шифрование и авторизация', 'Сохранение модели и тема', "Взаимодействие с рабочим столом и согласие", 'Раздельные данные и приватность', 'Отслеживание и ручная интеграция'],
 };
 const limitText: Record<Language, string> = {
   'zh-Hant': '公開差異可能省略 patch、超出檔案或輸入上限，或無法取得子模組差異。以下代碼標示本次未涵蓋範圍；所有報告都尚未經合併與執行測試。',
