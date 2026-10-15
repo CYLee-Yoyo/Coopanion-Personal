@@ -94,7 +94,8 @@ const FACE_TONES = {
 };
 /** Body modes in which the figure travels across the stage or squashes fast (dancing steps and sways on the spot). */
 const CLIMB_MODES = new Set(['climb-walk', 'climb', 'mantle']);
-const MOVING_MODES = new Set(['drag', 'air', 'crouch', 'land', 'walk', 'run', 'dance', ...CLIMB_MODES]);
+const DESCENT_MODES = new Set(['descend-walk', 'descend-crouch']);
+const MOVING_MODES = new Set(['drag', 'air', 'crouch', 'land', 'walk', 'run', 'dance', ...CLIMB_MODES, ...DESCENT_MODES]);
 /** Points on the body in logo units, for a figure that names none: where the eyes look from, where a tear starts,
  *  where z's and hearts start ([x from, x to, y]), the bubble's spot. `tears` (one start under each eye) has no default. */
 const ANCHORS = { gaze: [140, 117], tear: [166, 136], z: [196, 40], hearts: [90, 175, 34], bubble: [128, 0] };
@@ -136,7 +137,7 @@ export function createPet(els, opts) {
   const onEvent = opts.onEvent || (() => {});
   const words = opts.words || {};
   let W = 0, H = 0, floorY = 0, S = .42, T = 0;
-  let surfaces = [], support = null, climb = null, perchAt = 8;
+  let surfaces = [], support = null, climb = null, departure = null, perchAt = 8;
   let roam = opts.roam ?? 'free';
   let skin = opts.skin || null;
   let hold = 0; // until T: an order from outside is in progress, free roaming waits
@@ -200,6 +201,14 @@ export function createPet(els, opts) {
         pet.target = climbOutside(edge);
       }
     }
+    if (departure) {
+      const plan = descentPlans().find(p => p.side === departure.side);
+      if (plan) {
+        pet.target = plan.x;
+        if (pet.mode === 'descend-crouch' && Math.abs(pet.x - plan.x) > 2) setMode('descend-walk');
+      }
+      else cancelDeparture();
+    }
     if (!pet.placed && W > 0) {
       pet.x = opts.startX != null ? opts.startX : W * .7; pet.placed = true;
       if (opts.enter === 'drop') { pet.fy = -8; pet.vy = 0; pet.vx = 0; pet.airKind = 'drop'; setMode('air'); }
@@ -227,6 +236,7 @@ export function createPet(els, opts) {
     const prev = pet.mode;
     if (m === 'air' || m === 'drag' || m === 'climb' || m === 'mantle') support = null;
     if (!CLIMB_MODES.has(m)) climb = null;
+    if (!DESCENT_MODES.has(m)) departure = null;
     // an arrival clears walkId before going idle, so anything else that ends a walk (a turn, a bow, listening) cuts it short
     if ((prev === 'walk' || prev === 'run') && pet.walkId) {
       onEvent('interrupted', { walkId: pet.walkId, x: Math.round(pet.x), by: m });
@@ -238,7 +248,8 @@ export function createPet(els, opts) {
     Object.assign(pet, o);
     if (prev !== m) onEvent('mode', { mode: m });
   }
-  const busy = () => pet.mode === 'drag' || pet.mode === 'air' || pet.mode === 'crouch' || CLIMB_MODES.has(pet.mode);
+  const busy = () => pet.mode === 'drag' || pet.mode === 'air' || pet.mode === 'crouch'
+    || CLIMB_MODES.has(pet.mode) || DESCENT_MODES.has(pet.mode);
   function pickTarget(minDist) {
     for (let i = 0; i < 12; i++) {
       const x = rnd(minX(), maxX());
@@ -367,11 +378,19 @@ export function createPet(els, opts) {
     const calm = roam === 'calm';
     const plans = T >= perchAt ? perchPlans() : [];
     const climbs = T >= perchAt ? climbPlans() : [];
-    const opts2 = [['climb', climbs.length ? (calm ? 4 : 10) : 0], ['perch', plans.length ? (calm ? 4 : 12) : 0], ['walk', calm ? 10 : 28], ['run', calm ? 0 : 12], ['look', 14], ['jump', calm ? 2 : 8], ['sit', 16], ['expr', 12], ['wait', calm ? 30 : 10]]
+    const descents = T >= perchAt ? descentPlans() : [];
+    const opts2 = [['descend', descents.length ? (calm ? 4 : 12) : 0], ['climb', climbs.length ? (calm ? 4 : 10) : 0], ['perch', plans.length ? (calm ? 4 : 12) : 0], ['walk', calm ? 10 : 28], ['run', calm ? 0 : 12], ['look', 14], ['jump', calm ? 2 : 8], ['sit', 16], ['expr', 12], ['wait', calm ? 30 : 10]]
       .filter(o => o[1] > 0 && (o[0] !== pet.lastAct || o[0] === 'wait'));
     let r = Math.random() * opts2.reduce((a, o) => a + o[1], 0), pick = 'wait';
     for (const o of opts2) { if ((r -= o[1]) < 0) { pick = o[0]; break; } }
-    if (pick === 'climb') {
+    if (pick === 'descend') {
+      const plan = descents[Math.floor(Math.random() * descents.length)];
+      departure = { side: plan.side };
+      pet.lastAct = 'descend'; pet.expr = null;
+      perchAt = T + (calm ? 45 : 20);
+      setMode('descend-walk', { target: plan.x });
+    }
+    else if (pick === 'climb') {
       climb = climbs[Math.floor(Math.random() * climbs.length)];
       pet.lastAct = 'climb'; pet.expr = null;
       perchAt = T + (calm ? 45 : 20);
@@ -411,18 +430,28 @@ export function createPet(els, opts) {
     setMode(approaching ? 'idle' : 'air'); pet.nextAt = T + 3;
   }
 
+  function descentPlans() {
+    if (!support) return [];
+    const height = Math.min(28, pet.fy - 250 * S - 12);
+    if (height <= 0) return [];
+    const jumpV = Math.sqrt(2 * 2300 * height), seconds = 2 * jumpV / 2300;
+    return [-1, 1].flatMap(side => {
+      const x = clamp(side === -1 ? minX() + 8 : maxX() - 8, minX(), maxX());
+      const crossing = support.x + (side === 1 ? support.width : 0) + side * (footMargin() + 16);
+      if (crossing < stageMinX() || crossing > stageMaxX()) return [];
+      const jumpVx = (crossing - x) * .4 / (1 - Math.exp(-.4 * seconds));
+      return Math.abs(jumpVx) <= 650 ? [{ side, x, jumpV, jumpVx }] : [];
+    });
+  }
+  function cancelDeparture() { setMode('idle'); pet.speed = 0; pet.nextAt = T + 3; }
+
   function perchPlans() {
-    const targets = surfaces.filter(s => s.id !== support?.id && Math.abs(s.y - pet.fy) > 12)
+    const targets = surfaces.filter(s => s.id !== support?.id && s.y < pet.fy - 12)
       .flatMap(s => {
         const left = Math.max(stageMinX(), s.x + footMargin() + 8);
         const right = Math.min(stageMaxX(), s.x + s.width - footMargin() - 8);
         return left <= right ? [{ x: clamp(pet.x, left, right), y: s.y }] : [];
       });
-    if (support) {
-      for (const x of [support.x - 100, support.x + support.width + 100]) {
-        if (x >= stageMinX() && x <= stageMaxX()) targets.push({ x, y: floorY });
-      }
-    }
     return targets.flatMap(target => {
       const rise = pet.fy - target.y;
       const height = Math.min(Math.max(0, rise) + 48, pet.fy - 250 * S - 12);
@@ -431,11 +460,6 @@ export function createPet(els, opts) {
       const seconds = (jumpV + Math.sqrt(jumpV * jumpV - 2 * 2300 * rise)) / 2300;
       const jumpVx = (target.x - pet.x) * .4 / (1 - Math.exp(-.4 * seconds));
       if (Math.abs(jumpVx) > 650 || Math.abs(target.x - pet.x) > 600) return [];
-      // A downward trip must clear the current ledge before crossing its height again.
-      if (support && rise < 0) {
-        const x = pet.x + jumpVx * (1 - Math.exp(-.4 * (2 * jumpV / 2300))) / .4;
-        if (x >= support.x - footMargin() && x <= support.x + support.width + footMargin()) return [];
-      }
       return [{ jumpV, jumpVx }];
     });
   }
@@ -457,6 +481,7 @@ export function createPet(els, opts) {
     T += dt; pet.modeT += dt;
     A = anchors();
     if (climb && (roam === 'off' || T <= hold || opts.dialogOpen?.() || pet.listening)) releaseClimb();
+    if (departure && (roam === 'off' || T <= hold || opts.dialogOpen?.() || pet.listening)) cancelDeparture();
     const m = pet.mode, mt = pet.modeT;
     let sqT = 0, strideT = 0, liftT = 0, leanT = 0, sitT = 0, bobT = 0, rate = 0, lookT = [0, 0], tiltT = 0;
     let tk = 160, tc = 12, drowseT = 0;
@@ -487,7 +512,7 @@ export function createPet(els, opts) {
         if (free && !pet.listening && T > pet.nextAt && !(pet.expr && T < pet.exprUntil)) decide();
         break;
       }
-      case 'climb-walk': case 'walk': case 'run': {
+      case 'descend-walk': case 'climb-walk': case 'walk': case 'run': {
         const run = m === 'run', d = pet.target - pet.x, dist = Math.abs(d), dir = Math.sign(d) || pet.facing;
         pet.facing = dir;
         const vMax = run ? 250 : 78;
@@ -501,7 +526,7 @@ export function createPet(els, opts) {
         const k = clamp(pet.speed / vMax, 0, 1);
         strideT *= .4 + .6 * k; liftT *= .4 + .6 * k;
         pet.phase += Math.PI * 2 * rate * dt * Math.max(.35, k);
-        lookT = [run ? 4 : 3, run ? 1 : 0];
+        lookT = [run ? 4 : 3, m === 'descend-walk' ? 3 : run ? 1 : 0];
         const half = Math.floor(pet.phase / Math.PI);
         if (half !== pet.lastHalf) {
           play('step', 'move', run, half & 1);
@@ -513,6 +538,12 @@ export function createPet(els, opts) {
           if (m === 'climb-walk') {
             pet.facing = -climb.edge.side;
             setMode('climb');
+            break;
+          }
+          if (m === 'descend-walk') {
+            const plan = descentPlans().find(p => p.side === departure.side);
+            if (plan) { pet.facing = plan.side; setMode('descend-crouch'); }
+            else cancelDeparture();
             break;
           }
           const id = pet.walkId; pet.walkId = 0;
@@ -579,9 +610,16 @@ export function createPet(els, opts) {
         }
         break;
       }
-      case 'crouch': {
+      case 'descend-crouch': case 'crouch': {
         sqT = .24; sitT = .3;
+        if (m === 'descend-crouch') { lookT = [4, 4]; leanT = 6; }
         if (mt > .16) {
+          if (m === 'descend-crouch') {
+            const plan = descentPlans().find(p => p.side === departure.side);
+            if (!plan) { cancelDeparture(); break; }
+            if (Math.abs(pet.x - plan.x) > 2) { setMode('descend-walk', { target: plan.x }); break; }
+            pet.jumpV = plan.jumpV; pet.jumpVx = plan.jumpVx;
+          }
           pet.vy = -pet.jumpV; pet.vx = pet.jumpVx; pet.airKind = 'jump'; pet.sqv -= 2.6;
           play('jump', 'move');
           setMode('air');
@@ -702,7 +740,7 @@ export function createPet(els, opts) {
     pet.gap[1] = lerp(pet.gap[1], fc.gap[1], ease(8, dt));
     // turning reads as a quick card flip rather than a mirror snap
     pet.faceVis = lerp(pet.faceVis, pet.facing, ease(15, dt));
-    if (!['walk', 'run', 'dance', 'climb-walk', 'climb'].includes(m)) pet.phase = lerp(pet.phase, Math.round(pet.phase / Math.PI) * Math.PI, ease(6, dt));
+    if (!['walk', 'run', 'dance', 'climb-walk', 'descend-walk', 'climb'].includes(m)) pet.phase = lerp(pet.phase, Math.round(pet.phase / Math.PI) * Math.PI, ease(6, dt));
     pointer.vx *= Math.exp(-dt * 6);
 
     // secondary motion for ears/antenna/scarf: lags behind horizontal movement
@@ -1076,7 +1114,7 @@ export function createBody(host, opts) {
     shift: ctl.shiftDrag,
     /** Puts a body that is standing at stage x, turned to `facing` (1 right, -1 left). */
     place(x, facing) {
-      if (ctl.pet.mode === 'drag' || ctl.pet.mode === 'air' || CLIMB_MODES.has(ctl.pet.mode)) return;
+      if (ctl.pet.mode === 'drag' || ctl.pet.mode === 'air' || CLIMB_MODES.has(ctl.pet.mode) || DESCENT_MODES.has(ctl.pet.mode)) return;
       const { minX, maxX } = ctl.bounds;
       ctl.pet.x = ctl.pet.target = clamp(x, minX, maxX);
       if (facing === 1 || facing === -1) ctl.pet.facing = ctl.pet.faceVis = facing;

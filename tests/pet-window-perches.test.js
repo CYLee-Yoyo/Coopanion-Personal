@@ -16,10 +16,10 @@ function scene(options = {}) {
   });
   const run = seconds => { for (let i = 0; i < seconds * 120; i++) { pet.step(1 / 120); pet.render(); } };
   const fall = (x = 500, y = 300) => { Object.assign(pet.pet, { x, fy: y, mode: 'air', vy: 1, vx: 0, airKind: 'drop' }); run(1); };
-  const until = (predicate, seconds = 35) => {
-    for (let i = 0; i < seconds * 120; i++) {
+  const until = (predicate, seconds = 35, dt = 1 / 120) => {
+    for (let i = 0; i < seconds / dt; i++) {
       if (predicate()) return;
-      pet.step(1 / 120); pet.render();
+      pet.step(dt); pet.render();
     }
     throw new Error(`Body condition was not reached: ${pet.pet.mode}`);
   };
@@ -138,6 +138,115 @@ describe('window-top body physics', () => {
   it('retains the original floor-only behavior when no surfaces are provided', () => {
     const s = scene(); delete s.bounds.surfaces; s.pet.resize(); s.fall();
     expect(s.pet.pet.fy).toBe(s.bounds.floorY);
+  });
+});
+
+describe('autonomous jumps down from window tops', () => {
+  beforeEach(() => { vi.spyOn(Math, 'random').mockReturnValue(.001); });
+  afterEach(() => { vi.restoreAllMocks(); });
+  function perched(side = -1, options = {}) {
+    const s = scene(options);
+    s.bounds.surfaces = [{ id: 'floating', x: side === -1 ? 200 : 0, y: 420,
+      width: side === -1 ? 1000 : 800, originX: side === -1 ? 200 : 0 }];
+    s.pet.resize(); s.fall(); s.pet.setRoam('free'); s.pet.holdRoam(8);
+    return s;
+  }
+
+  it.each([[-1, 30], [1, 30], [-1, 60], [1, 60], [-1, 120], [1, 120]])(
+    'approaches side %s, hops clear, and lands on the desktop at %s fps', (side, fps) => {
+      const s = perched(side), dt = 1 / fps, top = s.bounds.surfaces[0];
+      s.until(() => s.pet.pet.mode === 'descend-walk', 35, dt);
+      expect(s.pet.pet.fy).toBe(top.y);
+      s.until(() => s.pet.pet.mode === 'descend-crouch', 35, dt);
+      expect(Math.abs(s.pet.pet.x - (side === -1 ? top.x : top.x + top.width))).toBeLessThan(40);
+      s.until(() => s.pet.pet.mode === 'air', 35, dt);
+      expect(s.pet.pet.vy).toBeLessThan(0);
+      expect(Math.sign(s.pet.pet.vx)).toBe(side);
+      s.until(() => s.pet.pet.fy > top.y, 5, dt);
+      expect(side === -1 ? s.pet.pet.x < top.x : s.pet.pet.x > top.x + top.width).toBe(true);
+      s.until(() => s.pet.pet.mode === 'land', 5, dt);
+      expect(s.pet.pet.fy).toBe(s.bounds.floorY);
+      expect(s.pet.busy()).toBe(false);
+    });
+
+  it('lands on the first lower window in the jump path', () => {
+    const s = perched(); s.bounds.surfaces[0].width = 600;
+    s.bounds.surfaces.push({ id: 'lower', x: 0, y: 650, width: 1200, originX: 0 }); s.pet.resize();
+    s.until(() => s.pet.pet.mode === 'descend-crouch');
+    s.until(() => s.pet.pet.mode === 'land');
+    expect(s.pet.pet.fy).toBe(650);
+  });
+
+  it('follows the window during the approach and recomputes takeoff after a move', () => {
+    const s = perched(); s.until(() => s.pet.pet.mode === 'descend-walk'); s.run(.5);
+    s.bounds.surfaces = [{ id: 'floating', x: 280, y: 450, width: 600, originX: 280 }]; s.pet.resize();
+    expect(s.pet.pet.fy).toBe(450);
+    s.until(() => s.pet.pet.mode === 'descend-crouch');
+    s.bounds.surfaces = [{ id: 'floating', x: 300, y: 430, width: 600, originX: 300 }]; s.pet.resize();
+    s.until(() => s.pet.pet.mode === 'air');
+    s.until(() => s.pet.pet.fy > 430, 5);
+    expect(s.pet.pet.x).toBeLessThan(300);
+    s.until(() => s.pet.pet.mode === 'land', 5);
+    expect(s.pet.pet.fy).toBe(s.bounds.floorY);
+  });
+
+  it.each(['quiet', 'listening', 'dialog', 'roam-off'])('cancels preparation when %s starts', change => {
+    let dialogOpen = false;
+    const s = perched(-1, { dialogOpen: () => dialogOpen });
+    s.until(() => s.pet.pet.mode === (change === 'quiet' || change === 'dialog' ? 'descend-walk' : 'descend-crouch'));
+    if (change === 'quiet') s.pet.holdRoam(30);
+    if (change === 'listening') s.pet.setListening(true);
+    if (change === 'dialog') dialogOpen = true;
+    if (change === 'roam-off') s.pet.setRoam('off');
+    s.run(.6);
+    expect(s.pet.pet.mode).toBe('idle');
+    expect(s.pet.pet.fy).toBe(420);
+  });
+
+  it('falls normally if the supporting window disappears during preparation', () => {
+    const s = perched(); s.until(() => s.pet.pet.mode === 'descend-crouch');
+    s.bounds.surfaces = []; s.pet.resize(); s.pet.setRoam('off'); s.run(2);
+    expect(s.pet.pet.fy).toBe(s.bounds.floorY);
+  });
+
+  it('cancels takeoff when a resize leaves no space beyond the selected edge', () => {
+    const s = perched(1); s.until(() => s.pet.pet.mode === 'descend-crouch');
+    s.bounds.surfaces = [{ id: 'floating', x: 0, y: 420, width: 1200, originX: 0 }];
+    s.pet.resize(); expect(s.pet.pet.mode).toBe('idle'); s.pet.holdRoam(30); s.run(.6);
+    expect(s.pet.pet.mode).toBe('idle'); expect(s.pet.pet.fy).toBe(420);
+  });
+
+  it('walks to a resized edge before taking off instead of jumping from the old edge', () => {
+    const s = perched(1); s.until(() => s.pet.pet.mode === 'descend-crouch');
+    s.bounds.surfaces = [{ id: 'floating', x: 0, y: 420, width: 1000, originX: 0 }]; s.pet.resize();
+    expect(s.pet.pet.mode).toBe('descend-walk'); expect(s.pet.pet.fy).toBe(420);
+    s.until(() => s.pet.pet.mode === 'descend-crouch'); expect(s.pet.pet.x).toBeGreaterThan(950);
+    s.until(() => s.pet.pet.mode === 'air'); s.until(() => s.pet.pet.fy > 420, 5);
+    expect(s.pet.pet.x).toBeGreaterThan(1000);
+    s.until(() => s.pet.pet.mode === 'land', 5); expect(s.pet.pet.fy).toBe(s.bounds.floorY);
+  });
+
+  it('stays supported when neither side has room for a downward jump', () => {
+    const s = perched();
+    s.bounds.surfaces = [{ id: 'floating', x: 0, y: 420, width: 1200, originX: 0 }]; s.pet.resize();
+    s.run(30);
+    expect(s.events.some(e => e.mode === 'descend-walk')).toBe(false);
+    expect(s.pet.pet.fy).toBeLessThanOrEqual(420);
+  });
+
+  it('finishes the flight if roaming is switched off after takeoff', () => {
+    const s = perched(); s.until(() => s.pet.pet.mode === 'air'); s.pet.setRoam('off');
+    s.until(() => s.pet.pet.mode === 'land', 5);
+    expect(s.pet.pet.fy).toBe(s.bounds.floorY);
+  });
+
+  it('can jump back up and later leave the window again while roaming', () => {
+    const s = perched();
+    s.until(() => s.pet.pet.mode === 'descend-crouch');
+    s.until(() => s.pet.pet.mode === 'land'); expect(s.pet.pet.fy).toBe(s.bounds.floorY);
+    s.until(() => s.pet.pet.mode === 'land' && s.pet.pet.fy === 420, 80);
+    s.until(() => s.pet.pet.mode === 'descend-crouch', 80);
+    s.until(() => s.pet.pet.mode === 'land'); expect(s.pet.pet.fy).toBe(s.bounds.floorY);
   });
 });
 
