@@ -10,8 +10,9 @@ export const PERSONAL_FEATURES = [
   { id: 'models', paths: ['console/features/home/', 'console/companion.css', 'console/base/'], description: 'Immediate model persistence, account-specific catalog, themed model popup, and readable primary-button text.' },
   { id: 'computerUse', paths: ['console/features/cua/', 'console/features/pet/', 'packages/cortico-world-desktop-pet/src/cua/',
     'packages/cortico-world-desktop-pet/host/', 'packages/cortico-world-desktop-pet/web/kit/', 'packages/cortico-world-desktop-pet/web/pet-app.js',
+    'packages/cortico-world-desktop-pet/web/whale/figure.js', 'packages/cortico-world-desktop-pet/src/ENV_PROMPT',
     'packages/cortico-world-desktop-pet/src/config.ts', 'packages/cortico-world-desktop-pet/src/world.ts'],
-    description: 'Computer-use settings refresh current tools and prompts while preserving history and consent. Window-top interaction uses read-only geometry, follows moving windows, supports dragging and autonomous jumps, and never moves other windows or changes focus; its setting applies immediately.' },
+    description: 'Computer-use settings refresh current tools and prompts while preserving history and consent. Window-top interaction reads geometry only, follows moving windows, supports manual drops, autonomous jumps and side-edge climbing, applies settings immediately, and never moves other windows or changes focus. Climbing stops for missing or blocked edges, dialogs, listening and quiet mode.' },
   { id: 'isolation', paths: ['app/', 'core/personal-seed.ts', 'core/telemetry.ts', 'scripts/', 'electron-builder.yml', 'package.json'], description: 'Separate installation and data, disabled telemetry, no automatic installation, and reviewed source backups to the operator fork with upstream pushes disabled.' },
   { id: 'tracking', paths: ['core/upstream-', 'core/personal-upstream.ts', 'console/features/updates/', 'console/features/release.ts', 'core/notice.ts', 'core/companion.ts'], description: 'Six-hour public release checks, subscription-only review, one report per release, pet notification and a saved request for manual integration.' },
 ] as const;

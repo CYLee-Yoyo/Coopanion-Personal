@@ -105,6 +105,18 @@ describe('public upstream boundary', () => {
     }
   });
 
+  it.each([
+    { kind: 'a renamed whale renderer', file: { filename: 'packages/cortico-world-desktop-pet/web/whale/figure-next.js',
+      previous_filename: 'packages/cortico-world-desktop-pet/web/whale/figure.js', status: 'renamed' } },
+    { kind: 'side geometry', file: { filename: 'packages/cortico-world-desktop-pet/host/window-surfaces.cjs', status: 'modified' } },
+  ])('flags $kind for desktop preservation review', async ({ file }) => {
+    const { source } = publicFetch((route, value) => route.startsWith('Coopanion/') && route.includes('compare/')
+      ? { ...value, files: [{ ...file, additions: 1, deletions: 1, patch: '-old\n+new' }] } : value);
+    const changes = await source.diff(release, new AbortController().signal);
+    expect(changes.overlaps).toContain('computerUse');
+    expect(changes.files[0]?.previousPath).toBe(file.previous_filename);
+  });
+
   it('rejects prereleases and malformed tags before constructing more requests', async () => {
     for (const data of [{ prerelease: true }, { tag_name: '../private' }, { tag_name: 'v1.2.3-beta' }]) {
       const { source } = publicFetch((route, value) => route.endsWith('releases/latest') ? { ...value, ...data } : value);
