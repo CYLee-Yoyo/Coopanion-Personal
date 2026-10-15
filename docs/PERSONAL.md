@@ -40,6 +40,8 @@ Core 支援系統代理與 PAC，手動設定的代理環境變數優先。啟�
 
 統計回傳、自動下載與安裝更新皆停用。原專案與 Cortico 子模組的 push URL 維持停用。只允許將經審核的提交推送到自己的 fork，不向原專案提出 PR，不發佈套件、安裝包或診斷資料。沿用原專案的授權、作者標示、第三方聲明、測試與開發規範；CLA 依原專案 CONTRIBUTING.md 在未來提交 PR 時處理。
 
+每次修改完成並通過必要檢查後，先審核待上傳的完整歷史、檔案與提交中繼資料中的登入憑證、API Key、Cookie、密文檔案、私人聯絡資料、本機使用者路徑、對話、截圖、紀錄及診斷資料，再備份到自己的 fork。此流程已有持續授權，不需逐次確認。發現疑慮先在本機修正並重新審核；無法排除時保留本機修改、暫停該次備份並回報原因。禁止向原專案推送或提出 PR。
+
 主倉庫使用 `scripts/hooks/pre-push`：以 `git config core.hooksPath scripts/hooks` 安裝。每次推送前審核完整的待上傳歷史、檔案與提交中繼資料，確認未包含真實憑證、個人資料、建置產物、診斷或本機審核報告，並使用 GitHub noreply 信箱。審核後，將目的 URL、完整分支 ref 與 commit 分別保存在本機 Git 配置 `personal.backupUrl`、`personal.backupRef`、`personal.reviewedCommit`。Hook 僅接受名為 `backup` 的遠端及完全相符的目的地、分支與提交；新提交必須重新審核。Git 配置與舊的私人歷史不會隨公開分支上傳。
 
 開發驗證使用 `CORTICO_COMPANION_DATA` 指向新的空資料目錄，再執行 `pnpm run dev`。不要使用原版已安裝的資料測試。完整檢查為 `pnpm run build:cortico`、`pnpm run typecheck`、`pnpm run typecheck:web`、`pnpm run typecheck:worlds`、`pnpm run test`、`pnpm run test:worlds`。Windows 安裝包使用 `pnpm run build:installer` 產生，打包命令固定使用 `--publish never`。

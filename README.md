@@ -4,6 +4,8 @@ This personal build tracks upstream v0.1.27 with Cortico v0.1.16, including prom
 
 **Coopanion Personal — personal fork of [Pal-AI-Lab/Coopanion](https://github.com/Pal-AI-Lab/Coopanion).** Sign in with ChatGPT on the Start page, select an available model, then choose Test and start. It uses the authorized ChatGPT plan, never automatically falls back to a paid API, and disables upstream telemetry and automatic updates. Reviewed source is backed up in this fork; credentials, app data, builds and local audit reports are excluded. See [personal build operation](docs/PERSONAL.md). The upstream AGPL-3.0-or-later license, attribution and third-party notices are retained. This fork does not publish installers or submit upstream pull requests automatically; the installation instructions below describe upstream releases.
 
+Completed changes are backed up to this fork after the required checks and a review of outgoing files, history and commit metadata for credentials and personal information. Unresolved findings stop the backup. Upstream pushes and pull requests remain disabled.
+
 Authorization waits for fifteen minutes. If the browser returns to a refused local connection, start a new sign-in from the app.
 
 Model choices are saved immediately and restored when returning to the Start page. The expanded model menu follows the console's palette; primary buttons use the palette's text colour for their background.

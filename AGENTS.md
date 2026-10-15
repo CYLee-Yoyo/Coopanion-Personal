@@ -2,11 +2,17 @@
 
 ## Personal fork
 
-Reviewed source backups may be pushed only to the operator's GitHub fork. Before each push,
-review the complete outgoing history, file contents and commit metadata for credentials and
-personal data; use a GitHub noreply commit email. The pre-push hook accepts only the locally
-approved commit, destination and branch. Keep upstream and Cortico push URLs disabled. Never
-open a pull request, publish packages or releases, or send diagnostics without an explicit request.
+After each completed change, run the required checks, review the complete outgoing history,
+file contents and commit metadata for credentials and personal data, then back up the reviewed
+commits to https://github.com/CYLee-Yoyo/Coopanion-Personal without requesting permission again.
+This is standing authorization for that fork only. Review tokens, API keys, cookies, encrypted
+credentials, private contact details, user-specific paths, conversations, screenshots, logs and
+diagnostics. Resolve findings locally and repeat the review; if the review cannot pass, leave
+the backup pending and report the reason. Use a GitHub noreply commit email.
+The pre-push hook accepts only the locally approved commit, destination and branch. Push only
+the reviewed branch through `backup`; never bypass the hook, force-push, or use `--all`, `--mirror`
+or `--tags`. Keep upstream and Cortico push URLs disabled. Do not push to upstream or open a
+pull request. Package or release publication and diagnostic uploads require an explicit request.
 Credentials, personal data, generated builds and local audit reports are never committed.
 Preserve upstream licenses, attribution, development rules and third-party notices.
 Public release checks and subscription-only reviews are authorized. Telemetry, automatic
