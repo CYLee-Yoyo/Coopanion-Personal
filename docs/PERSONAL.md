@@ -1,4 +1,4 @@
-# app/chatgpt-auth.cjs、core/upstream-watch.ts、console/features/updates/、scripts/check-personal-push.mjs 與 packages/cortico-provider-coo/src/chatgpt/：專屬版
+# app/chatgpt-auth.cjs、core/upstream-watch.ts、console/features/updates/、console/features/pet/、scripts/check-personal-push.mjs 與 packages/cortico-provider-coo/src/chatgpt/：專屬版
 
 Coopanion Personal 使用獨立的安裝識別 `local.coopanion.personal`。Windows 安裝位置為 `%LOCALAPPDATA%\Programs\CoopanionPersonal`，資料位置為 `%LOCALAPPDATA%\CoopanionPersonal`，控制台使用本機連接埠 17888。原版 Coopanion 的資料不會被匯入。
 
@@ -29,6 +29,8 @@ Core 支援系統代理與 PAC，手動設定的代理環境變數優先。啟�
 安全測試使用假的測試憑證、簽章 JWT 與本機 HTTP 伺服器，不使用真實帳號的 token。Windows DPAPI 的防護範圍不包含已取得同一 Windows 使用者權限的惡意程式。
 
 習慣頁的電腦操作設定儲存後，會同步目前對話的工具清單與操作說明，並保留對話紀錄。離開頁面不會取消已提交的設定與同步。操作前詢問與同意有效期仍由電腦操作設定控制。
+
+Windows 的「習慣 → 顯示 → 視窗互動 → 站在視窗頂端」預設開啟。可將內建桌寵拖到有足夠空間的一般視窗頂端放下；走動開啟時也會自行跳上，對話、語音聆聽或暫時安靜時不會主動跳上。視窗移動時跟隨，縮小、關閉、遮住落點或移到其他螢幕時落回下方可支撐的邊緣。最大化與全螢幕視窗不當作落點。此功能只讀取視窗幾何與顯示狀態，不讀取標題或畫面、不移動其他視窗、不切換焦點，也不呼叫模型或要求開啟電腦操作。關閉設定後回到桌面底部的行為；重啟不保存視窗識別。
 
 「原版更新」在應用程式開啟時每六小時檢查 GitHub 公開正式版。啟動時補做已到期的檢查；關閉程式期間不執行。手動檢查不會重新分析已有報告的版本。登入失效、額度不足或執行暫停時不會改用 API；新版本尚未開始分析時會等待可用的訂閱連線。已開始而失敗或中斷的分析不會自動重試，可在頁面手動重試並再次使用訂閱額度。若本機狀態損壞，版本追蹤先停用，避免遺失去重紀錄後自動重新分析。
 

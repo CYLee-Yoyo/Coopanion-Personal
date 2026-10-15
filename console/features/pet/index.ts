@@ -46,6 +46,7 @@ const KEYS = {
   lockFps: `${K}.window.lockFrameRate`,
   frameRate: `${K}.window.frameRate`,
   hideFullscreen: `${K}.window.hideWhenFullscreen`,
+  perchWindows: `${K}.window.perchWindows`,
   overlay: `${K}.window.exportOverlay`,
   sound: `${K}.sound`,
   snoreSeconds: `${K}.sounds.snoreSeconds`,
@@ -142,6 +143,7 @@ async function mount(ctx: PageContext): Promise<void> {
     { size: 'sm', onSelect: (v) => void save(KEYS.frameRate, Number(v), GROUP, displayMsg) });
   const lockFps = ui.checkbox(S.lockFps, { onChange: (on) => void save(KEYS.lockFps, on, GROUP, displayMsg) });
   const hideFullscreen = ui.checkbox(S.hideFullscreen, { onChange: (on) => void save(KEYS.hideFullscreen, on, GROUP, displayMsg) });
+  const perchWindows = ui.checkbox(S.perchWindows, { onChange: (on) => void save(KEYS.perchWindows, on, GROUP, displayMsg) });
   const remember = ui.checkbox(S.remember, { onChange: (on) => void save(KEYS.remember, on, GROUP, displayMsg) });
   const dblclick = ui.checkbox(S.dblclick, { onChange: (on) => void save(KEYS.dblclick, on, GROUP, behaviorMsg) });
   const statusBubble = ui.checkbox(S.statusBubble, { onChange: (on) => void save(KEYS.statusBubble, on, GROUP, behaviorMsg) });
@@ -277,6 +279,8 @@ async function mount(ctx: PageContext): Promise<void> {
   // the World declares this setting on Windows only; elsewhere its value never arrives and the row stays hidden
   const hideFullscreenRow = row(S.hideFullscreenLabel, hideFullscreen.el, S.hideFullscreenHint);
   hideFullscreenRow.hidden = true;
+  const perchWindowsRow = row(S.perchWindowsLabel, perchWindows.el, S.perchWindowsHint);
+  perchWindowsRow.hidden = true;
 
   // sections: general, how Coo behaves and is reached, how it shows on the screen, sounds, computer use;
   // every row names its setting on the left, except one that only refines the row above it
@@ -303,6 +307,7 @@ async function mount(ctx: PageContext): Promise<void> {
     row(S.frameRate, frameRate.el, S.frameRateHint),
     row('', lockFps.el, S.lockFpsHint),
     hideFullscreenRow,
+    perchWindowsRow,
     row(S.rememberLabel, remember.el, S.rememberHint),
     displayMsg,
   );
@@ -351,7 +356,8 @@ async function mount(ctx: PageContext): Promise<void> {
   /* ---------- behaviour ---------- */
   const save = async (key: string, value: string | number | boolean, group = GROUP, line = msg) => {
     try {
-      await setConfig(group, { [key]: value }, opts);
+      await setConfig(group, { [key]: value }, { keepalive: true });
+      if (signal.aborted) return;
       // everything saves as it changes: only a failure is worth a line
       line.textContent = '';
       line.classList.remove('bad');
@@ -443,6 +449,7 @@ async function mount(ctx: PageContext): Promise<void> {
     }
     if (typeof values[KEYS.lockFps] === 'boolean') lockFps.setChecked(values[KEYS.lockFps] as boolean);
     if (typeof values[KEYS.hideFullscreen] === 'boolean') { hideFullscreen.setChecked(values[KEYS.hideFullscreen] as boolean); hideFullscreenRow.hidden = false; }
+    if (typeof values[KEYS.perchWindows] === 'boolean') { perchWindows.setChecked(values[KEYS.perchWindows] as boolean); perchWindowsRow.hidden = false; }
     if (typeof values[KEYS.remember] === 'boolean') remember.setChecked(values[KEYS.remember] as boolean);
     if (typeof values[KEYS.dblclick] === 'boolean') dblclick.setChecked(values[KEYS.dblclick] as boolean);
     if (typeof values[KEYS.statusBubble] === 'boolean') statusBubble.setChecked(values[KEYS.statusBubble] as boolean);
