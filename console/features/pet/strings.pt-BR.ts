@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   lockFpsHint: 'Desenha na taxa acima também em repouso; desligado, o repouso cai para 30 quadros por segundo.',
   perchWindowsLabel: "Interação com janelas",
   perchWindows: "Ficar sobre as janelas",
-  perchWindowsHint: "Arraste o pet para o topo de janelas normais com espaço ou deixe-o pular conforme a configuração de movimento. Ele acompanha a janela e cai quando o apoio desaparece. Lê apenas os limites, sem ler títulos ou conteúdo, mover janelas ou mudar o foco.",
+  perchWindowsHint: "Arraste o pet para o topo de janelas normais com espaço ou deixe-o pular ou escalar uma lateral acessível e desobstruída conforme a configuração de movimento. Ele acompanha a janela e cai quando o apoio desaparece. Lê apenas os limites, sem ler títulos ou conteúdo, mover janelas ou mudar o foco.",
   hideFullscreen: 'Ocultar automaticamente',
   hideFullscreenHint: 'Some enquanto algo está em tela cheia e volta depois. Uma janela maximizada não conta.',
   soundTitle: 'Sons',

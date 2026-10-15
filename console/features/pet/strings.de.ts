@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   lockFpsHint: 'Zeichnet auch im Ruhezustand mit der eingestellten Rate; wenn aus, sinkt sie im Ruhezustand auf 30 Bilder pro Sekunde.',
   perchWindowsLabel: "Fensterinteraktion",
   perchWindows: "Auf Fenstern stehen",
-  perchWindowsHint: "Auf normale Fenster mit genügend Platz ziehen oder beim Umherlaufen hinaufspringen lassen. Das Tier folgt bewegten Fenstern und fällt, wenn die Unterlage verschwindet. Es liest nur Fenstergrenzen, keine Titel oder Bildschirminhalte, und bewegt keine Fenster oder den Fokus.",
+  perchWindowsHint: "Auf normale Fenster mit genügend Platz ziehen oder beim Umherlaufen hinaufspringen oder an einer erreichbaren, freien Seite hinaufklettern lassen. Das Tier folgt bewegten Fenstern und fällt, wenn die Unterlage verschwindet. Es liest nur Fenstergrenzen, keine Titel oder Bildschirminhalte, und bewegt keine Fenster oder den Fokus.",
   hideFullscreen: 'Automatisch ausblenden',
   hideFullscreenHint: 'Blendet sich bei Vollbild aus und kommt danach zurück. Ein maximiertes Fenster zählt nicht.',
   soundTitle: 'Töne',
