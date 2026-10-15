@@ -141,6 +141,8 @@ export interface DesktopPetConfigSection extends WorldSection {
     lockFrameRate: boolean;
     /** Hide the pet window while a fullscreen window covers the display it is on. */
     hideWhenFullscreen: boolean;
+    /** Stand on visible window tops and include them in autonomous roaming on Windows. */
+    perchWindows: boolean;
     /** Serve `/overlay`, the pet window's picture for an OBS browser source. */
     exportOverlay: boolean;
   };
@@ -208,7 +210,7 @@ export const DESKTOP_PET_DEFAULTS: DesktopPetConfigSection = {
   enabled: false,
   port: 7797,
   user: '',
-  window: { enabled: true, electronFile: '', scale: 1, glow: GLOW_DEFAULT, frameRate: 60, lockFrameRate: false, hideWhenFullscreen: false, exportOverlay: false },
+  window: { enabled: true, electronFile: '', scale: 1, glow: GLOW_DEFAULT, frameRate: 60, lockFrameRate: false, hideWhenFullscreen: false, perchWindows: true, exportOverlay: false },
   roam: 'calm',
   sound: true,
   sounds: { move: true, touch: true, face: true, snore: true, talk: true, ui: true, snoreSeconds: 0 },
@@ -267,6 +269,7 @@ export function desktopPetConfigGroups(language: Language = 'zh'): ConfigGroup[]
         // only the window process on Windows can tell another program is full screen (host/electron-main.cjs `fullscreen`); unregistered, the 「习惯」 page hides it too
         ...(process.platform === 'win32' ? {
           [`${K}.window.hideWhenFullscreen`]: { type: 'boolean', title: c.hideWhenFullscreen.title, description: c.hideWhenFullscreen.description, 'x-hot': true },
+          [`${K}.window.perchWindows`]: { type: 'boolean', title: c.perchWindows.title, description: c.perchWindows.description, 'x-hot': true },
         } : {}),
         [`${K}.window.exportOverlay`]: { type: 'boolean', title: c.exportOverlay.title, description: c.exportOverlay.description, 'x-hot': true },
         [`${K}.window.electronFile`]: { type: 'string', title: c.electronFile.title, description: c.electronFile.description, 'x-path': { kind: 'file' }, 'x-hot': false },

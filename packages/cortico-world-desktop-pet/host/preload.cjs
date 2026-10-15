@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('petHost', {
   onShown: (cb) => ipcRenderer.on('pet:shown', (_e, shown) => cb(!!shown)),
   /** Whether the window hides itself while a fullscreen window covers its display. */
   hideWhenFullscreen: (on) => ipcRenderer.send('pet:hideWhenFullscreen', !!on),
+  /** Enable read-only window-top geometry; no mouse, keyboard or foreign-window commands. */
+  perchWindows: (on) => ipcRenderer.send('pet:perchWindows', !!on),
+  onWindowSurfaces: (cb) => ipcRenderer.on('pet:windowSurfaces', (_e, surfaces) => cb(surfaces)),
   openDress: () => ipcRenderer.send('pet:openDress'),
   /** The app language the page shows, for the window process's own words (the tray menu). */
   setLanguage: (code) => ipcRenderer.send('pet:language', String(code)),

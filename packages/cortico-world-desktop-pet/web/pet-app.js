@@ -63,8 +63,9 @@ else ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, ()
 
 /** Page pixels the window reaches below the floor, over a taskbar (the window process says how many); a figure may draw there. */
 let below = 0;
+let windowSurfaces = [];
 const floorGap = () => (host ? 2 + below : 48);
-const bounds = () => ({ W: innerWidth, H: innerHeight, floorY: innerHeight - floorGap(), S: .42 * prefs.scale });
+const bounds = () => ({ W: innerWidth, H: innerHeight, floorY: innerHeight - floorGap(), S: .42 * prefs.scale, surfaces: windowSurfaces });
 /**
  * The body on screen (body-host.js), null until the first one is ready, and the words it does (its pack's
  * vocab, by id). `T` is the page's clock, in seconds of frames drawn.
@@ -76,6 +77,12 @@ const at = () => body?.layout ?? null;
 const bodyState = { listening: false, thinking: false, thoughtShown: true, dialogOpen: false };
 const holdRoam = (seconds) => body?.set({ hold: seconds });
 host?.onFloor?.((px) => { below = px; body?.set({ bounds: bounds() }); });
+host?.onWindowSurfaces?.((surfaces) => {
+  if (!Array.isArray(surfaces) || surfaces.length > 1024) return;
+  windowSurfaces = surfaces.filter(s => s && typeof s.id === 'string' && s.id.length <= 64
+    && [s.x, s.y, s.width, s.originX].every(v => typeof v === 'number' && Number.isFinite(v)) && s.width > 0);
+  body?.set({ bounds: bounds() });
+});
 addEventListener('resize', () => {
   body?.set({ bounds: bounds() });
   // the World reads walk targets and drop spots against the stage the pet is on now
@@ -236,6 +243,7 @@ function applyPrefs(p) {
   if (typeof p.frameRate === 'number' && p.frameRate >= 0) prefs.frameRate = p.frameRate;
   // the window process does the hiding; the page only passes the setting on
   if (typeof p.hideWhenFullscreen === 'boolean') host?.hideWhenFullscreen?.(p.hideWhenFullscreen);
+  if (typeof p.perchWindows === 'boolean') host?.perchWindows?.(p.perchWindows);
   if (Array.isArray(p.hoverButtons)) prefs.hoverButtons = p.hoverButtons.filter((id) => typeof id === 'string' && id in ACTIONS);
   if (p.bot) { prefs.bot = p.bot; if (!menu.hidden && !menu.querySelector('.m-head.confirm')) renderMenuHead(); }
   if (typeof p.language === 'string' && p.language !== language()) void switchLanguage(p.language);

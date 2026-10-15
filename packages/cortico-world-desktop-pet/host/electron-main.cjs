@@ -25,6 +25,7 @@ const { pathToFileURL } = require('node:url');
 const { createCursorSource } = require('./cursor.cjs');
 const { createMouseLease } = require('./mouse-lease.cjs');
 const { createOverlaySource } = require('./overlay.cjs');
+const { createWindowSurfaceSource } = require('./window-surfaces.cjs');
 
 /** The pages' text table of `code`, falling back as web/i18n.js does. */
 async function pageText(code) {
@@ -302,6 +303,17 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
   let displayId = null;
   /** The setting, and whether it is what hid the window. */
   let hideWhenFullscreen = false, autoHidden = false;
+  let perchWindows = false, surfaceSnapshot = '';
+  const windowSurfaces = createWindowSurfaceSource({ screen });
+  const sendSurfaces = (force = false) => {
+    if (!win) return;
+    const surfaces = perchWindows && win.isVisible() ? windowSurfaces.read(win) : [];
+    const snapshot = JSON.stringify(surfaces);
+    if (force || snapshot !== surfaceSnapshot) {
+      surfaceSnapshot = snapshot;
+      win.webContents.send('pet:windowSurfaces', surfaces);
+    }
+  };
 
   /** The display the window belongs on: the one it was moved to, or the primary display once that one is gone. */
   const display = () => screen.getAllDisplays().find((d) => d.id === displayId) ?? screen.getPrimaryDisplay();
@@ -317,6 +329,7 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
     win.setBounds(rect);
     // where the floor is: the page keeps it this far above the window's bottom
     win.webContents.send('pet:floor', below);
+    sendSurfaces(true);
     return area;
   };
 
@@ -358,14 +371,14 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
     // The page cannot tell for itself that it is hidden (background throttling is off, so it always reads as
     // visible): the window tells it, for the settings window's 「在桌面上 / 已隐藏」.
     win.on('show', () => win?.webContents.send('pet:shown', true));
-    win.on('hide', () => { win?.webContents.send('pet:shown', false); mouse.release(); });
+    win.on('hide', () => { win?.webContents.send('pet:shown', false); mouse.release(); sendSurfaces(true); });
     // Zoom stays at 1: the cursor below is sent in DIPs and the page hit-tests with them as CSS pixels,
     // so any zoom flips the window between click-through and interactive. A drawing tablet's shortcut
     // keys are a keyboard and can send Ctrl+- to the focused pet, and the zoom is saved per host.
     win.webContents.on('before-input-event', (event, input) => {
       if ((input.control || input.meta) && (['-', '_', '=', '+', '0'].includes(input.key) || ['NumpadAdd', 'NumpadSubtract', 'Numpad0'].includes(input.code))) event.preventDefault();
     });
-    win.webContents.on('did-finish-load', () => { win.webContents.setZoomLevel(0); overlay.pageLoaded(); win.webContents.send('pet:floor', coverArea(display()).below); });
+    win.webContents.on('did-finish-load', () => { win.webContents.setZoomLevel(0); overlay.pageLoaded(); win.webContents.send('pet:floor', coverArea(display()).below); sendSurfaces(true); });
     // The page learns where the cursor is even when the click-through window misses its moves, and
     // it renews the mouse lease in its answer to every report: the report goes out on every tick,
     // not only when the pointer moved, so a cursor that rests still still gets a verdict.
@@ -380,6 +393,7 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
       const inside = pt.x >= b.x && pt.x < b.x + b.width && pt.y >= b.y && pt.y < b.y + b.height;
       const at = inside ? { x: pt.x - b.x, y: pt.y - b.y } : null;
       win.webContents.send('pet:cursor', at);
+      sendSurfaces();
       mouse.tick();
     }, CURSOR_EVERY_MS);
     // hidden while the setting is on and a window fills the pet's monitor; shown again once neither holds
@@ -431,6 +445,11 @@ function runPetHost({ url, parentPid = 0, tray: withTray = true }) {
   ipcMain.on('pet:hide', () => { releaseAutoHidden(); if (win) win.hide(); });
   ipcMain.on('pet:overlayFrame', (_e, rect, at) => overlay.frame(rect, at));
   ipcMain.on('pet:hideWhenFullscreen', (_e, on) => { hideWhenFullscreen = !!on; });
+  ipcMain.on('pet:perchWindows', (e, on) => {
+    if (e.sender !== win?.webContents || typeof on !== 'boolean') return;
+    perchWindows = on;
+    sendSurfaces(true);
+  });
   ipcMain.on('pet:openDress', () => openDress());
   let language = 'zh';
   ipcMain.on('pet:language', (_e, code) => {

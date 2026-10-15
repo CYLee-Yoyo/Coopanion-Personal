@@ -104,7 +104,8 @@ const HITS = [[128, 128, 108]];
 /* ---------- the live pet: simulation, rendering, pointer ---------- */
 /**
  * `els`: { petG, shadowEl, fxG }, SVG elements the body draws into (the shadow is an ellipse).
- * `opts.bounds()` returns { W, H, floorY, S } in stage pixels.
+ * `opts.bounds()` returns { W, H, floorY, S, surfaces? } in stage pixels. Optional surfaces are
+ * visible window-top segments { id, x, y, width, originX }; they only catch a falling body.
  * `opts.onEvent(kind, detail)` reports what happened to the body: arrived, interrupted, touch, mode, done.
  * `opts.sfx.play(name, kind, ...args)` asks for a sound (web/sound.js names them); an `sfx` without `play`
  * is called by name instead (`sfx.jump()`), for pages that record the calls.
@@ -132,6 +133,7 @@ export function createPet(els, opts) {
   const onEvent = opts.onEvent || (() => {});
   const words = opts.words || {};
   let W = 0, H = 0, floorY = 0, S = .42, T = 0;
+  let surfaces = [], support = null, perchAt = 8;
   let roam = opts.roam ?? 'free';
   let skin = opts.skin || null;
   let hold = 0; // until T: an order from outside is in progress, free roaming waits
@@ -154,19 +156,39 @@ export function createPet(els, opts) {
   const P = [];
   const anchors = () => ({ ...ANCHORS, ...custom?.anchors });
   let A = anchors();
-  const minX = () => 104 * S + 8, maxX = () => W - 104 * S - 8;
+  const stageMinX = () => 104 * S + 8, stageMaxX = () => W - 104 * S - 8;
+  const footMargin = () => 42 * S;
+  const minX = () => support ? Math.max(stageMinX(), support.x + footMargin()) : stageMinX();
+  const maxX = () => support ? Math.min(stageMaxX(), support.x + support.width - footMargin()) : stageMaxX();
+  const fits = (surface, x) => x >= surface.x + footMargin() && x <= surface.x + surface.width - footMargin();
   const faceDef = n => FACES[n] ?? FACES[words[n]?.expression?.like] ?? FACES.neutral;
 
   function resize() {
     const b = opts.bounds();
     W = b.W; H = b.H; floorY = b.floorY; S = b.S;
+    surfaces = (b.surfaces ?? []).filter(s => s.y >= 300 * S + 24 && s.y < floorY
+      && Math.max(stageMinX(), s.x + footMargin()) <= Math.min(stageMaxX(), s.x + s.width - footMargin()));
+    if (support) {
+      const next = surfaces.find(s => s.id === support.id);
+      const x = next ? pet.x + next.originX - support.originX : pet.x;
+      const segment = surfaces.find(s => s.id === support.id && fits(s, x));
+      if (segment && x >= stageMinX() && x <= stageMaxX()) {
+        pet.target += x - pet.x;
+        pet.x = x;
+        support = segment;
+      } else {
+        support = null;
+        pet.vx = pet.vy = 0; pet.airKind = 'drop';
+        if (pet.mode !== 'drag' && pet.mode !== 'air') setMode('air');
+      }
+    }
     if (!pet.placed && W > 0) {
       pet.x = opts.startX != null ? opts.startX : W * .7; pet.placed = true;
       if (opts.enter === 'drop') { pet.fy = -8; pet.vy = 0; pet.vx = 0; pet.airKind = 'drop'; setMode('air'); }
     }
     pet.x = clamp(pet.x, minX(), maxX());
     pet.target = clamp(pet.target, minX(), maxX());
-    if (pet.mode !== 'air' && pet.mode !== 'drag') pet.fy = floorY;
+    if (pet.mode !== 'air' && pet.mode !== 'drag') pet.fy = support?.y ?? floorY;
   }
 
   function toStage(lx, ly) {
@@ -185,6 +207,7 @@ export function createPet(els, opts) {
 
   function setMode(m, o = {}) {
     const prev = pet.mode;
+    if (m === 'air' || m === 'drag') support = null;
     // an arrival clears walkId before going idle, so anything else that ends a walk (a turn, a bow, listening) cuts it short
     if ((prev === 'walk' || prev === 'run') && pet.walkId) {
       onEvent('interrupted', { walkId: pet.walkId, x: Math.round(pet.x), by: m });
@@ -322,16 +345,53 @@ export function createPet(els, opts) {
 
   function decide() {
     const calm = roam === 'calm';
-    const opts2 = [['walk', calm ? 10 : 28], ['run', calm ? 0 : 12], ['look', 14], ['jump', calm ? 2 : 8], ['sit', 16], ['expr', 12], ['wait', calm ? 30 : 10]]
+    const plans = T >= perchAt ? perchPlans() : [];
+    const opts2 = [['perch', plans.length ? (calm ? 4 : 12) : 0], ['walk', calm ? 10 : 28], ['run', calm ? 0 : 12], ['look', 14], ['jump', calm ? 2 : 8], ['sit', 16], ['expr', 12], ['wait', calm ? 30 : 10]]
       .filter(o => o[1] > 0 && (o[0] !== pet.lastAct || o[0] === 'wait'));
     let r = Math.random() * opts2.reduce((a, o) => a + o[1], 0), pick = 'wait';
     for (const o of opts2) { if ((r -= o[1]) < 0) { pick = o[0]; break; } }
-    if (pick === 'look') { setMode('look'); pet.lastAct = 'look'; }
+    if (pick === 'perch') {
+      const plan = plans[Math.floor(Math.random() * plans.length)];
+      pet.lastAct = 'perch'; pet.expr = null;
+      pet.facing = Math.sign(plan.jumpVx) || pet.facing;
+      perchAt = T + (calm ? 45 : 20);
+      setMode('crouch', plan);
+    }
+    else if (pick === 'look') { setMode('look'); pet.lastAct = 'look'; }
     else if (pick === 'expr') { setExpr(['happy', 'wink', 'love', 'sleepy', 'surprised', 'shy'][Math.floor(Math.random() * 6)]); pet.lastAct = 'expr'; }
     // a sit she chose decides up front whether it ends in sleep, so she only gets drowsy when she will fall asleep
     else if (pick === 'sit') { setMode('sit', { dur: rnd(6, 9), willSleep: Math.random() < .6 }); pet.lastAct = 'sit'; }
     else if (pick !== 'wait') act(pick);
     if (pet.mode === 'idle' && T >= pet.nextAt) pet.nextAt = T + rnd(2, 4);
+  }
+
+  function perchPlans() {
+    const targets = surfaces.filter(s => s.id !== support?.id && Math.abs(s.y - pet.fy) > 12)
+      .flatMap(s => {
+        const left = Math.max(stageMinX(), s.x + footMargin() + 8);
+        const right = Math.min(stageMaxX(), s.x + s.width - footMargin() - 8);
+        return left <= right ? [{ x: clamp(pet.x, left, right), y: s.y }] : [];
+      });
+    if (support) {
+      for (const x of [support.x - 100, support.x + support.width + 100]) {
+        if (x >= stageMinX() && x <= stageMaxX()) targets.push({ x, y: floorY });
+      }
+    }
+    return targets.flatMap(target => {
+      const rise = pet.fy - target.y;
+      const height = Math.min(Math.max(0, rise) + 48, pet.fy - 250 * S - 12);
+      if (height <= rise || height <= 0) return [];
+      const jumpV = Math.sqrt(2 * 2300 * height);
+      const seconds = (jumpV + Math.sqrt(jumpV * jumpV - 2 * 2300 * rise)) / 2300;
+      const jumpVx = (target.x - pet.x) * .4 / (1 - Math.exp(-.4 * seconds));
+      if (Math.abs(jumpVx) > 650 || Math.abs(target.x - pet.x) > 600) return [];
+      // A downward trip must clear the current ledge before crossing its height again.
+      if (support && rise < 0) {
+        const x = pet.x + jumpVx * (1 - Math.exp(-.4 * (2 * jumpV / 2300))) / .4;
+        if (x >= support.x - footMargin() && x <= support.x + support.width + footMargin()) return [];
+      }
+      return [{ jumpV, jumpVx }];
+    });
   }
 
   /* particles */
@@ -459,6 +519,7 @@ export function createPet(els, opts) {
         break;
       }
       case 'air': {
+        const from = { x: pet.x, y: pet.fy };
         pet.vy += 2300 * dt;
         pet.vx *= Math.exp(-dt * .4);
         pet.x += pet.vx * dt; pet.fy += pet.vy * dt;
@@ -468,7 +529,15 @@ export function createPet(els, opts) {
         sqT = -Math.min(.12, Math.abs(pet.vy) / 6000);
         tiltT = clamp(pet.vx * .025, -30, 30);
         tk = 70; tc = 8;
-        if (pet.fy >= floorY && pet.vy > 0) land();
+        if (pet.vy > 0) {
+          const surface = surfaces.filter(s => from.y <= s.y + .5 && pet.fy >= s.y
+            && fits(s, from.x + (pet.x - from.x) * clamp((s.y - from.y) / (pet.fy - from.y), 0, 1)))
+            .sort((a, b) => a.y - b.y)[0];
+          if (surface) {
+            pet.x = from.x + (pet.x - from.x) * clamp((surface.y - from.y) / (pet.fy - from.y), 0, 1);
+            land(surface);
+          } else if (pet.fy >= floorY) land();
+        }
         break;
       }
       case 'land': {
@@ -621,9 +690,10 @@ export function createPet(els, opts) {
     pet._fc = fc; pet._fname = fname;
   }
 
-  function land() {
+  function land(surface = null) {
     const impact = pet.vy, kind = pet.airKind;
-    pet.fy = floorY; pet.vy = 0; pet.vx = 0;
+    support = surface;
+    pet.fy = surface?.y ?? floorY; pet.vy = 0; pet.vx = 0;
     pet.sqv += clamp(impact * .0024, .8, 4.5);
     play('land', 'move', kind !== 'jump' && impact > 1000);
     dustAt(128, impact > 900 ? 7 : 3, 70);
@@ -664,8 +734,9 @@ export function createPet(els, opts) {
     });
 
     const footY = drag ? pet.dy + 220 * S * 1.09 : pet.fy;
-    const k = clamp(1 - (floorY - footY) / 420, .3, 1);
-    shadowEl.setAttribute('cx', f(AX)); shadowEl.setAttribute('cy', f(floorY - 2));
+    const shadowFloor = support?.y ?? Math.min(floorY, ...surfaces.filter(s => s.y >= footY - 1 && fits(s, AX)).map(s => s.y));
+    const k = clamp(1 - (shadowFloor - footY) / 420, .3, 1);
+    shadowEl.setAttribute('cx', f(AX)); shadowEl.setAttribute('cy', f(shadowFloor - 2));
     shadowEl.setAttribute('rx', f(72 * S * k * (1 + pet.sq * .5))); shadowEl.setAttribute('ry', f(10 * S * k + 1));
     shadowEl.setAttribute('opacity', f(k));
 
