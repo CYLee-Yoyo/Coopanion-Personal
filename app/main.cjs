@@ -53,7 +53,7 @@ const BUILD = JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8')).c
 const STEAM = BUILD.channel === 'steam';
 const DATA = process.env.CORTICO_COMPANION_DATA
   || (!app.isPackaged ? join(APP_ROOT, 'build', 'data')
-    : MAC || LINUX || STEAM ? join(app.getPath('appData'), 'Coopanion') : join(dirname(process.execPath), 'data'));
+    : join(process.platform === 'win32' ? process.env.LOCALAPPDATA || app.getPath('appData') : app.getPath('appData'), 'CoopanionPersonal'));
 
 /**
  * An install made through the installer's pages sits in %LOCALAPPDATA%\Programs\Coopanion: the "only for me"
@@ -63,7 +63,7 @@ const DATA = process.env.CORTICO_COMPANION_DATA
  * be the one in use, so a dialog asks first (askRestoreStranded); taking the old one back then happens on the
  * next start, before anything here is open, and keeps this one beside it as data-replaced-<time>.
  */
-const STRANDED_DIR = process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Programs', 'Coopanion') : null;
+const STRANDED_DIR = null; // The personal build never imports another installation's data.
 const STRANDED_DATA = STRANDED_DIR && join(STRANDED_DIR, 'data');
 /** The answer to that dialog: `restore` or `keep`. */
 const STRANDED_CHOICE = join(DATA, 'stranded-data-choice');
@@ -92,8 +92,7 @@ function restoreStrandedData() {
   appendFileSync(join(DATA, 'logs', 'data-restore.log'), `${new Date().toISOString()} ${line}\n`);
   return false;
 }
-const askStranded = app.isPackaged && process.platform === 'win32' && !STEAM && !process.env.CORTICO_COMPANION_DATA
-  && !process.argv.includes('--pet-host') && restoreStrandedData();
+const askStranded = false;
 
 // before anything asks Electron for a path: the single-instance lock and the profile live in userData
 app.setPath('userData', DATA);
@@ -154,6 +153,17 @@ let settings = null;
 let tray = null;
 let quitting = false;
 let updater = null;
+let chatgptAuth = null;
+core.on('chatgpt-request', async (message) => {
+  if (typeof message.id !== 'string' || !['status', 'signin', 'cancel', 'signout', 'token', 'refresh', 'usage'].includes(message.method)) return;
+  try {
+    if (!chatgptAuth) throw new Error('ChatGPT 登入服務尚未準備完成。');
+    const result = await chatgptAuth.invoke(message.method);
+    core.send({ type: 'personal:chatgpt-result', id: message.id, result });
+  } catch (error) {
+    core.send({ type: 'personal:chatgpt-result', id: message.id, error: error instanceof Error ? error.message : 'ChatGPT 登入服務失敗。' });
+  }
+});
 /** The updater's last step, told again to a Core that starts after it (`core/companion.ts` says it in the bubble). */
 let updateStep = null;
 
@@ -257,7 +267,7 @@ const isLocal = (url) => /^(https?|wss?):\/\/(127\.0\.0\.1|localhost|\[::1\])(:\
 /** Requests of the settings session leave the machine only for the release check. */
 function keepRemoteOut(ses) {
   ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, (details, answer) => {
-    answer({ cancel: !(isLocal(details.url) || details.url === RELEASE_CHECK) });
+    answer({ cancel: !(isLocal(details.url)) });
   });
 }
 
@@ -308,7 +318,7 @@ function openSettings(path = '') {
   const area = screen.getPrimaryDisplay().workAreaSize;
   settings = new BrowserWindow({
     width: Math.min(1200, area.width), height: Math.min(800, area.height), minWidth: 880, minHeight: 600,
-    title: 'Coopanion', icon: join(ICONS, 'icon.png'), autoHideMenuBar: true, show: false,
+    title: 'Coopanion Personal', icon: join(ICONS, 'icon.png'), autoHideMenuBar: true, show: false,
     backgroundColor: '#f4f5f4',
     webPreferences: { partition: SETTINGS_PARTITION, preload: join(__dirname, 'settings-preload.cjs'), contextIsolation: true, sandbox: true, spellcheck: false },
   });
@@ -394,7 +404,7 @@ function buildTray() {
   icon.addRepresentation({ scaleFactor: 2, buffer: nativeImage.createFromPath(join(ICONS, `${name}@2x.png`)).toPNG() });
   if (MAC) icon.setTemplateImage(true);
   tray = new Tray(icon);
-  tray.setToolTip('Coopanion');
+  tray.setToolTip('Coopanion Personal');
   refreshTray();
   core.on('state', refreshTray);
   // on macOS a click opens the menu, as every menu-bar icon does
@@ -404,6 +414,7 @@ function buildTray() {
 core.on('ready', ({ language: next }) => {
   followLanguage(next);
   if (settings) settings.loadURL(settingsUrl());
+  else openSettings();
   if (updateStep) core.send(updateStep);
 });
 core.on('language', followLanguage);
@@ -415,8 +426,8 @@ core.on('state', (state, exit) => {
   if (!exit) return;
   const detail = exit.kind === 'locked' ? T().coreLocked(exit.pid, exit.file)
     : exit.kind === 'failed' ? T().coreFailed(exit.times, exit.code, exit.logFile) : T().coreRestarting(exit.code);
-  if (Notification.isSupported()) new Notification({ title: 'Coopanion', body: detail, icon: join(ICONS, 'icon.png') }).show();
-  if (state === 'failed') dialog.showErrorBox('Coopanion', detail);
+  if (Notification.isSupported()) new Notification({ title: 'Coopanion Personal', body: detail, icon: join(ICONS, 'icon.png') }).show();
+  if (state === 'failed') dialog.showErrorBox('Coopanion Personal', detail);
 });
 
 core.on('open', (path) => openSettings(path));
@@ -436,6 +447,7 @@ app.on('before-quit', (e) => {
   if (quitting) return;
   quitting = true;
   e.preventDefault();
+  chatgptAuth?.cancel();
   void core.stop().finally(() => {
     // a downloaded update installs now; its quit comes back here with quitting set and goes through
     if (updater?.installOnQuit()) setTimeout(() => app.exit(0), 10_000);
@@ -464,11 +476,16 @@ function askRestoreStranded() {
 
 ipcMain.on('settings:language', (e) => { e.returnValue = language; });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const settingsSession = session.fromPartition(SETTINGS_PARTITION);
   settingsSession.protocol.handle('http', serveWindow);
   keepRemoteOut(settingsSession);
-  app.setAppUserModelId('ai.pal.coopanion');
+  app.setAppUserModelId('local.coopanion.personal');
+  const { ChatGPTAuth } = require('./chatgpt-auth.cjs');
+  const { safeStorage } = require('electron');
+  chatgptAuth = new ChatGPTAuth({ dataDir: userData, storage: safeStorage, openExternal: url => shell.openExternal(url),
+    onChange: state => core.send({ type: 'personal:chatgpt-state', state }) });
+  await chatgptAuth.start();
   const system = systemLanguage(app);
   core.opts.env.COOPANION_SYSTEM_LANGUAGE = system;
   language = configuredLanguage(join(userData, 'home')) ?? system;
@@ -478,7 +495,7 @@ app.whenReady().then(() => {
   buildTray();
   noteAutostart();
   void core.start();
-  if (!STEAM) updater = startUpdater({
+  if (BUILD.channel === 'github') updater = startUpdater({
     logDir: join(userData, 'logs'),
     tell: (step) => { updateStep = { type: 'companion:update', ...step }; core.send(updateStep); },
   });

@@ -184,4 +184,4 @@ export {
   type Language, type Localized, type Protocol, type Region, type Site, type Vendor,
 } from './vendors.ts';
 export { VENDOR_ICONS } from './icons.ts';
-export { CHATGPT_PROVIDER, SIGN_IN_PANEL, USAGE_LIMIT, chatgptModule, signedIn, usageLimited, type SignInStatus } from './chatgpt/index.ts';
+export { createChatGPTModule } from './chatgpt/index.ts';

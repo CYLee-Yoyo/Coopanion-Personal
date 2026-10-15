@@ -58,7 +58,7 @@ import { withWorlds, type WorldDefinition, type WorldSection } from 'cortico/wor
 import { InstanceLockedError } from 'cortico/core/instance-lock.ts';
 import { TERMINAL } from 'cortico/worlds/terminal/definition.ts';
 import { desktopPetDefinition, figurePacks, type DesktopPetWorld } from 'cortico-world-desktop-pet';
-import COO, { CHATGPT, CHATGPT_PROVIDER, signedIn, usageLimited, vendorOf } from 'cortico-provider-coo';
+import COO, { CHATGPT as CHATGPT_VENDOR, vendorOf } from 'cortico-provider-coo';
 import { bundledConsoleAssets } from './bundled-panels.ts';
 import { followPetLook } from './console-theme.ts';
 import { askForKey, guideDone, markDone, runGuide, type GuideDeps } from './guide.ts';
@@ -68,12 +68,21 @@ import { petToolDescriber } from './pet-status.ts';
 import { appLanguage, modelLanguage, replyLanguage } from './language.ts';
 import { CONSOLE_PORT, DEPLOYMENT, DISPLAY_NAME, followLanguage as followPersonaLanguage, isSeededConstitution, seed } from './seed.ts';
 import { crashFields, describeEndpoint, publicExtensionName, Telemetry, type Counter } from './telemetry.ts';
+import { createChatGPTModule } from 'cortico-provider-coo/src/chatgpt/index.ts';
+import { CHATGPT_KIND, type ChatGPTSession } from 'cortico-provider-coo/src/chatgpt/types.ts';
+import { createChatGPTSession } from './chatgpt-session.ts';
+import { seedPersonal } from './personal-seed.ts';
+import { UpstreamWatch } from './upstream-watch.ts';
+import { upstreamText } from './upstream-strings.ts';
+import { upstreamSubscription } from './upstream-review.ts';
+
+let chatgptSession: ChatGPTSession | null = null;
 
 /** The active endpoint's key is set in the process environment or the endpoint's `.env`; a ChatGPT plan's endpoint is signed in. */
 function hasKey(config: CoreConfig): boolean {
   const entry = config.providers[config.activeProvider];
   if (!entry) return false;
-  if (entry.kind === CHATGPT_PROVIDER.id) return signedIn(join(providersRoot(), config.activeProvider));
+  if (entry.kind === CHATGPT_KIND) return chatgptSession?.status().sharing === true && Boolean(entry.spec?.model);
   if (!entry.secret) return true;
   return secretReader(join(providersRoot(), config.activeProvider, '.env'))(entry.secret) !== '';
 }
@@ -187,7 +196,7 @@ function countUse(core: Core<CoreConfig>, config: CoreConfig, telemetry: Telemet
 }
 
 /** Reads an endpoint's service for the statistics: a ChatGPT plan by its module, the others by base URL. */
-const endpointVendor = (entry: { kind: string } | undefined) => (url: string | undefined) => (entry?.kind === CHATGPT_PROVIDER.id ? CHATGPT : vendorOf(url));
+const endpointVendor = (entry: { kind: string } | undefined) => (url: string | undefined) => (entry?.kind === CHATGPT_KIND ? CHATGPT_VENDOR : vendorOf(url));
 
 /** Model requests failed in a row before the pet says so: Cortico's own alert threshold (`STALL_ALERT_THRESHOLD` in src/core/loop.ts), where the run of failures only reaches the log. */
 const FAILURES_BEFORE_HINT = 5;
@@ -234,7 +243,7 @@ function hintFailures(core: Core<CoreConfig>, config: CoreConfig, pet: () => Des
       shown = false;
       return answered;
     } catch (err) {
-      if (!options?.signal?.aborted && !usageLimited(err) && ++failures >= FAILURES_BEFORE_HINT && !shown) {
+      if (!options?.signal?.aborted && ++failures >= FAILURES_BEFORE_HINT && !shown) {
         const p = pet();
         if (p?.petState().connected) {
           const S = coreText(appLanguage(config.language)).failure;
@@ -384,12 +393,16 @@ export async function main(): Promise<void> {
   let pet: DesktopPetWorld | null = null;
   /** Set once the bot exists; the pet's menu reads it only after the pet page connects. */
   let bus: WakeBus | null = null;
+  chatgptSession = createChatGPTSession(state => { if (!state.sharing) bus?.setPaused(true); });
+  await chatgptSession.action('status');
+  const CHATGPT = createChatGPTModule(chatgptSession, () => bus?.setPaused(true));
   /** Set once the console listens. */
   let guide: GuideDeps | null = null;
   /** Set once the deployment is loaded. */
   let telemetry: Telemetry | null = null;
   let config: CoreConfig | null = null;
   let notice: NoticeWorld | null = null;
+  let upstream: UpstreamWatch | null = null;
   /** The introduction is running: the settings it makes are not told as changes. */
   let guiding = false;
   const guideRun = async (deps: GuideDeps) => {
@@ -413,6 +426,9 @@ export async function main(): Promise<void> {
       quit: () => process.send?.({ type: 'companion:quit' }),
       quitLabel: () => coreText(language()).quit,
       guide: () => {
+        if (config?.providers[config.activeProvider]?.kind === CHATGPT_KIND) {
+          process.send?.({ type: 'companion:open', path: '#/home' }); return;
+        }
         if (!guide) return;
         process.send?.({ type: 'companion:hide' });
         void guideRun(guide);
@@ -432,7 +448,7 @@ export async function main(): Promise<void> {
   const home = deploymentRoot();
   // the system's language, as the Electron main process read it; Chinese when the Core runs without it
   const system = process.env.COOPANION_SYSTEM_LANGUAGE;
-  seed(home, isLanguage(system) ? system : 'zh');
+  seedPersonal(home, isLanguage(system) ? system : 'zh-Hant');
   const deployDir = join(home, DEPLOYMENT);
   const NOTICE = noticeDefinition({
     version: process.env.COOPANION_VERSION ?? 'dev',
@@ -445,6 +461,7 @@ export async function main(): Promise<void> {
     guiding: () => guiding,
     onCreate: (world) => { notice = world; },
     label: () => coreText(language()).noticeLabel,
+    upstream: () => upstream,
   });
   /** Coopanion's config group; the console reads this object, retitled in place when the app language changes. */
   const settingsGroup = companionGroup('zh');
@@ -459,7 +476,7 @@ export async function main(): Promise<void> {
       // Cormini's 6/12 end a computer-use task partway through; 20/40 are the caps the desktop-pet
       // e2e harnesses give their persona
       rounds: { soft: 20, hard: 40 },
-      companion: { telemetry: true },
+      companion: { telemetry: false },
     }),
     build: (loaded, worlds) => {
       const parts = cormini.build(loaded, worlds);
@@ -480,9 +497,9 @@ export async function main(): Promise<void> {
   // extension providers must be registered before endpoints are resolved
   const extensions = await loadExtensions(repoRoot(), {
     reserved: bundled.map((w) => w.id),
-    reservedProviders: [...providerModules.map((m) => m.id), COO.id, CHATGPT_PROVIDER.id],
+    reservedProviders: [...providerModules.map((m) => m.id), COO.id, CHATGPT.id],
   });
-  registerProviderModules([COO, CHATGPT_PROVIDER, ...extensions.providers]);
+  registerProviderModules([COO, CHATGPT, ...extensions.providers]);
   extensions.consoleAssets.push(...bundledConsoleAssets([
     { id: DESKTOP_PET.id, packageName: 'cortico-world-desktop-pet' },
   ]));
@@ -506,12 +523,47 @@ export async function main(): Promise<void> {
 
   const bot = createBot(loaded, definition, { extensions });
   bus = bot.core.bus;
+  let reviewIdle = true;
+  bot.core.loop.onRunPhase(phase => { reviewIdle = phase.state === 'idle'; });
+  upstream = new UpstreamWatch({
+    dir: join(deployDir, 'upstream'), installedVersion: process.env.COOPANION_VERSION ?? 'dev', language,
+    subscription: () => {
+      const binding = upstreamSubscription(loaded.config, chatgptSession!, CHATGPT, bot.core.providers, language());
+      if (!binding) return null;
+      return { model: binding.model, client: { respond: async (request, options) => {
+        const track = bot.core.sessions.open('upstream-review', upstreamText(language()).nav);
+        try {
+          const result = await binding.client.respond(request, options);
+          track.recordAttempts(result.attempts);
+          return result;
+        } catch (error) {
+          if (error instanceof GenerationError) track.recordAttempts(error.attempts);
+          throw error;
+        } finally { track.close(); }
+      } } };
+    },
+    paused: () => bot.core.bus.isPaused(),
+    canNotify: () => reviewIdle && !guiding && !bot.core.bus.isPaused() && pet?.petState().connected === true && pet.petState().onDesktop === true,
+    notify: report => {
+      const s = upstreamText(language());
+      const handle = pet!.dialog({ text: `${s.latest}: ${report.release.version}\n${report.analysis.summary}\n\n${s.want} → ${s.save}`,
+        closable: true, actions: ['happy'], input: { kind: 'buttons', options: [
+          { label: s.view, primary: true }, { label: s.want }, { label: s.skip },
+        ] } });
+      return { close: () => handle.close(), answer: handle.answer.then(answer => {
+        if ('unavailable' in answer) return 'unavailable' as const;
+        if (!('index' in answer)) return 'closed' as const;
+        if (answer.index === 0 || answer.index === 1) process.send?.({ type: 'companion:open', path: '#/updates' });
+        return answer.index === 0 ? 'view' as const : answer.index === 1 ? 'update' as const : 'skip' as const;
+      }) };
+    },
+  });
   const stats = new Telemetry({
     dir: deployDir,
     version: process.env.COOPANION_VERSION ?? 'dev',
     // development runs point it at a local telemetry-server
     url: process.env.COOPANION_TELEMETRY_URL || undefined,
-    enabled: () => getByPath(loaded.config as unknown as Record<string, unknown>, TELEMETRY_KEY) !== false,
+    enabled: () => false,
     snapshot: () => snapshotOf(loaded.config, loaded.memoryDir),
     extensions: () => reportedExtensions(extensions),
   });
@@ -546,7 +598,9 @@ export async function main(): Promise<void> {
     modelLanguage: () => modelLanguage(loaded.config.language),
   };
   guide = guideDeps;
-  void introduce(guideDeps, guideRun, () => hasKey(loaded.config), keyMissing ? watchTalk(bot.core.bus) : null).catch((err) => {
+  void (loaded.config.providers[loaded.config.activeProvider]?.kind === CHATGPT_KIND
+    ? Promise.resolve(process.send?.({ type: 'companion:open', path: '#/home' }))
+    : introduce(guideDeps, guideRun, () => hasKey(loaded.config), keyMissing ? watchTalk(bot.core.bus) : null)).catch((err) => {
     bot.core.runlog.logger('process').emit('error', '引导出错', { event: 'guide-error', err });
   });
 

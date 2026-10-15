@@ -2,9 +2,10 @@
  * 「电脑操作」, a section of the 「习惯」 page (features/pet): the desktop-pet World's computer use in the
  * normal mode, in the page's rows (its label column, then the setting). Each row writes its key of the
  * computer-use config group through `/api/config` (only the keys shown here are sent). Yielding to the
- * person and screenshot sizes stay on the desktop-pet World's page in the advanced mode.
+ * person and screenshot sizes stay on the desktop-pet World's page in the advanced mode. Saved changes
+ * rebuild the current session's tools and environment prompt at a safe boundary.
  */
-import { get, setConfig } from '../../base/api.ts';
+import { get, post, setConfig } from '../../base/api.ts';
 import type { PageContext } from '../../base/page.ts';
 import { S } from './strings.ts';
 
@@ -71,12 +72,18 @@ export function cuaSection(ctx: PageContext, row: Row): HTMLElement {
   };
 
   const save = async (key: string, value: string | number | boolean) => {
+    const lock = ui.disable(enabled.input, control.input, grant, ...Array.from(level.el.querySelectorAll('button')));
+    let stored = false;
+    say(S.applying);
     try {
-      await setConfig(GROUP, { [key]: value }, opts);
-      say('');
+      // Finish a submitted setting and its tool/prompt reload even if this page is closed.
+      await setConfig(GROUP, { [key]: value }, { keepalive: true });
+      stored = true;
+      await post('/api/session/reload-prefix', {}, { keepalive: true });
+      if (!signal.aborted) say(S.applied);
     } catch (err) {
-      if (!signal.aborted) say(S.saveFailed(errText(err)), true);
-    }
+      if (!signal.aborted) say(stored ? S.applyFailed(errText(err)) : S.saveFailed(errText(err)), true);
+    } finally { lock.dispose(); }
   };
   grant.addEventListener('change', () => {
     const n = Number(grant.value);

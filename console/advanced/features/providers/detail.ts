@@ -322,7 +322,11 @@ export async function mountDetail(options: Options): Promise<DetailController> {
           if (!ownSections) for (const group of groups) groupBlock(box, group);
           break;
         case 'connection-pricing': pricingBlock(box, section); break;
-        case 'connection-protocol': protocolBlock(box, section, groups); break;
+        case 'connection-protocol':
+          if (editing.entry.kind === CHATGPT_MODULE && section.id === SIGN_IN_PANEL)
+            block(box, section, true).append(saved ? accountRow(ui, saved.name, lifecycle.signal) : ui.msgline(CHATGPT_TEXT.saveFirst));
+          else protocolBlock(box, section, groups);
+          break;
         default:
           // the ChatGPT module's sign-in section is drawn here; it ships no browser bundle
           if (editing.entry.kind === CHATGPT_MODULE && section.id === SIGN_IN_PANEL)

@@ -45,6 +45,7 @@ import { homePage } from './features/home/index.ts';
 import { onModeRequest, readMode, writeMode, type ConsoleMode } from './features/mode.ts';
 import { petPage } from './features/pet/index.ts';
 import { voicePage } from './features/voice/index.ts';
+import { updatesPage } from './features/updates/index.ts';
 import { createRail, type NavGroup, type NavItem } from './rail/index.ts';
 import { S as R } from './rail/strings.ts';
 import { L } from './strings.ts';
@@ -71,7 +72,7 @@ const fromFeature = (feature: FrameworkFeature, group: Entry['group'], basic = f
 /** The rail's entries in order. */
 export const ENTRIES: readonly Entry[] = [
   fromPage(homePage), fromPage(petPage), fromPage(dressPage), fromPage(voicePage),
-  fromFeature(promptsFeature, 'primary', true), fromPage(usagePage), fromPage(chatPage),
+  fromFeature(promptsFeature, 'primary', true), fromPage(usagePage), fromPage(chatPage), fromPage(updatesPage),
   // 模型供应商 keeps the providers page's own name
   fromFeature(providersFeature, 'integrations'), fromFeature(extensionsFeature, 'integrations'),
   fromFeature(traceFeature, 'diagnostics'), fromFeature(coreFeature, 'diagnostics'),

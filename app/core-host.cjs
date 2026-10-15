@@ -71,7 +71,9 @@ class CoreHost extends EventEmitter {
     this.restartAsked = false;
     this.emit('state', this.state);
     child.on('message', (msg) => {
-      if (msg?.type === 'companion:ready') {
+      if (msg?.type === 'personal:chatgpt-request') {
+        this.emit('chatgpt-request', msg);
+      } else if (msg?.type === 'companion:ready') {
         this.port = msg.port;
         this.dataDir = msg.dataDir;
         this.keyMissing = !!msg.keyMissing;

@@ -1,5 +1,18 @@
 # AGENTS.md
 
+## Personal fork
+
+Reviewed source backups may be pushed only to the operator's GitHub fork. Before each push,
+review the complete outgoing history, file contents and commit metadata for credentials and
+personal data; use a GitHub noreply commit email. The pre-push hook accepts only the locally
+approved commit, destination and branch. Keep upstream and Cortico push URLs disabled. Never
+open a pull request, publish packages or releases, or send diagnostics without an explicit request.
+Credentials, personal data, generated builds and local audit reports are never committed.
+Preserve upstream licenses, attribution, development rules and third-party notices.
+Public release checks and subscription-only reviews are authorized. Telemetry, automatic
+downloads and update installation remain disabled. ChatGPT subscription errors must never
+switch to paid API credentials.
+
 Rules for working in this repository. Coopanion is a desktop app assembled from
 [Cortico](vendor/cortico); [vendor/cortico/PHILOSOPHY.md](vendor/cortico/PHILOSOPHY.md) says what
 Cortico is, and [vendor/cortico/AGENTS.md](vendor/cortico/AGENTS.md) governs every change to

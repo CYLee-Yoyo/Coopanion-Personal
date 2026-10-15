@@ -1,3 +1,17 @@
+<!-- 專屬版：app/chatgpt-auth.cjs、scripts/check-personal-push.mjs 與 packages/cortico-provider-coo/src/chatgpt/ -->
+
+目前以原版 v0.1.27 與 Cortico v0.1.16 為基礎，包含提示詞編輯器的復原／重做、系統代理、語音輸入保護及對話修正；保留專屬版的加密登入、嚴格串流驗證、獨立資料與訂閱版本分析。代理啟動紀錄不寫入端點或底層錯誤內容。
+
+**Coopanion Personal — [Pal-AI-Lab/Coopanion](https://github.com/Pal-AI-Lab/Coopanion) 的專屬 fork。** 在開始頁使用 ChatGPT 登入，選擇可用模型後按「測試連線並開始」。使用經授權的訂閱額度，不會自動切換付費 API；作者的統計回傳與自動更新已停用。經審核的原始碼備份於此 fork，憑證、個人資料、建置產物與本機審核報告均不入庫，詳見 [專屬版操作說明](docs/PERSONAL.md)。沿用原專案的 AGPL-3.0-or-later 授權、作者標示及第三方聲明。本 fork 不會自動發佈安裝包或向原專案提出 PR；下方安裝說明適用於原版發行版本。
+
+登入等待十五分鐘。若瀏覽器跳回時顯示本機拒絕連線，請從程式重新開始登入。
+
+模型選擇會立即儲存，返回開始頁時會讀回設定。展開的模型清單跟隨控制台配色；主要按鈕使用配色指定的文字顏色。
+
+習慣頁的電腦操作設定變更會同步目前對話的工具與操作說明，保留對話紀錄及操作授權設定。
+
+專屬版開啟時每六小時檢查公開正式版。「原版更新」頁使用已選擇的 ChatGPT 訂閱模型，分析上游基準到新版的公開差異，每版自動分析一次。分析請求不會傳送本機原始碼、憑證或對話。桌寵提供查看報告、保存需求回到 Codex 人工整合，或略過此版本；不會安裝更新或切換付費 API。安裝與個人資料目錄維持獨立於開發倉庫。
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
@@ -221,7 +235,7 @@ irm https://raw.githubusercontent.com/Pal-AI-Lab/Coopanion/main/installer/instal
 <p align="center"><img src="image/README/habits-zh.png" alt="Habits" width="720"></p>
 <p align="center"><img src="image/README/dress-zh.png" alt="Dress up" width="720"></p>
 
-展开侧栏后，左上角显示当前版本，有新版本时下面会出现下载链接。Windows 版和 AppImage 会在后台自动下载新版本，下好后 Coo 会在气泡里问你要不要重启更新，不急的话下次退出时自动装上；下载卡住时可以去 GitHub 手动下载。Mac 版和 deb 仍需手动下载。更新之后，Coo 会告诉你新版本有什么变化；你在这里改了称呼、装扮、走动或电脑操作这些设置，它也会知道并回应。
+專屬版左上角的版本連結開啟「原版更新」，可查看公開版本、訂閱分析報告與本機整合需求。應用程式開啟時才檢查，自動下載與安裝保持停用。人工整合更新後，Coo 會告訴你版本變更；修改稱呼、裝扮、走動或電腦操作設定時，Coo 也會收到變更內容。
 
 左栏底部的「**高级模式**」显示全部页面（World、模型、扩展、记忆、终端与诊断），「回到普通模式」收起。普通模式折叠侧栏时隐藏「高级模式」按钮，展开后显示。
 

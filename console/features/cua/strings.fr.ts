@@ -1,6 +1,9 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  applying: 'Application des paramètres de contrôle…',
+  applied: 'Paramètres de contrôle appliqués.',
+  applyFailed: (why: string) => `Paramètres enregistrés, mais non appliqués : ${why}`,
   title: "Contrôle de l'ordinateur",
   enabled: 'Laisser Coo utiliser cet ordinateur',
   control: 'Autoriser la souris et le clavier',

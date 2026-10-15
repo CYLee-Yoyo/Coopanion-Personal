@@ -41,6 +41,21 @@ describe('Core proxy environment', () => {
     expect(source.no_proxy).toBe('two.test, localhost');
   });
 
+  it('keeps proxy credentials and lookup error details out of startup logs', async () => {
+    const secret = 'fixture-private-proxy-password';
+    const configured = await systemProxyEnvironment({}, async () => `PROXY user:${secret}@proxy.test:8080; DIRECT`);
+    expect(configured.vars.HTTPS_PROXY).toContain(secret);
+    expect(configured.note).not.toContain(secret);
+    expect(configured.note).not.toContain('proxy.test');
+    const failed = await systemProxyEnvironment({}, async () => { throw new Error(`PAC https://user:${secret}@proxy.test/config`); });
+    expect(failed.vars).toEqual({});
+    expect(failed.note).toContain('failed');
+    expect(failed.note).not.toContain(secret);
+    const unsupported = await systemProxyEnvironment({}, async () => `SOCKS5 user:${secret}@proxy.test:1080`);
+    expect(unsupported.vars).toEqual({});
+    expect(unsupported.note).not.toContain(secret);
+  });
+
   it('routes fetch and HTTP through the proxy while localhost remains direct in Electron Node', async () => {
     const hits: string[] = [];
     const target = createServer((req, res) => res.end(req.url));

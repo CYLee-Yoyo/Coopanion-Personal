@@ -1,162 +1,215 @@
-/**
- * Requests billed to a ChatGPT plan: the Responses client of `responses.ts` with the account's access
- * token, shaped for the plan's route (developers.openai.com/siwc/token-sharing-open-source/preview-limitations).
- * Every request streams with `store: false` and replays the whole context; system text already goes
- * in `instructions`; the parameters the route rejects are left out; function and custom tools go
- * inside one namespace, and past calls of them carry its name. Success is `response.completed` only,
- * which the transport already requires of a stream.
- *
- * The plan's usage limit (`subscription_sharing_usage_limit_exceeded`, an HTTP 429 or a failed stream)
- * stays inside the client: it logs each pause, sends nothing for `USAGE_PAUSE_MS`, and sends the
- * request again after it, for as long as the limit lasts, so to Core the request is only slow and no
- * failure is counted. A new event that preempts the request ends the wait. Two cases still fail with
- * the 429: a request that had already streamed output, which cannot be taken back, and a diagnostic
- * request (the console's connection test), which reports it. A failed stream starts the pause as its
- * event arrives, and the transport's retries in the pause fail without a connection; an HTTP 429 is
- * seen after the transport's own retries of it.
- */
-import { GenerationError, type GenerateOptions, type Generation } from 'cortico/core/generation.ts';
-import type { Logger } from 'cortico/core/types.ts';
-import type { ListedModel } from 'cortico/providers/base.ts';
-import type { ResponsesProviderOptions } from 'cortico/providers/openai-responses-compat/native.ts';
-import type { ResponseAssembly } from 'cortico/providers/transport/response-assembly.ts';
-import { LLMError, retryDelay } from 'cortico/providers/transport/errors.ts';
-import type { Request } from 'cortico/protocol/open-responses/index.ts';
-import { VendorResponses, type VendorQuirks } from '../responses.ts';
-import { ChatGPTAuthError, type ChatGPTAccount } from './auth.ts';
+/** Subscription-only Responses transport. No API key, paid-provider fallback, or automatic generation retry. */
+import { randomUUID } from 'node:crypto';
+import { BaseProvider, type ListedModel } from 'cortico/providers/base.ts';
+import { buildResponsesBody, type ResponsesProviderOptions } from 'cortico/providers/openai-responses-compat/native.ts';
+import { NativeResponseAssembly } from 'cortico/providers/transport/response-assembly.ts';
+import { EventDecoder, requestJson } from 'cortico/providers/transport/response-http.ts';
+import { GenerationError, unknownMeters, type GenerateOptions, type Generation, type ProviderAttempt } from 'cortico/core/generation.ts';
+import type { OutputItem, Request, StreamEvent } from 'cortico/protocol/open-responses/index.ts';
+import { ResponseProtocolError } from 'cortico/protocol/open-responses/stream.ts';
+import type { ChatGPTSession } from './types.ts';
+import { CHATGPT_BASE_URL } from './types.ts';
+import { sinceLastDelivery } from '../context.ts';
 
-/** The error code of the plan's usage limit. */
-export const USAGE_LIMIT = 'subscription_sharing_usage_limit_exceeded';
-/** How long no request goes out after the usage limit is reached, between tries. The service states no reset time. */
-export const USAGE_PAUSE_MS = 5 * 60_000;
-/** Request fields the plan's route rejects. */
-const UNSUPPORTED = [
-  'background', 'conversation', 'max_output_tokens', 'max_tool_calls', 'metadata', 'moderation', 'multi_agent', 'prompt',
-  'prompt_cache_retention', 'safety_identifier', 'service_tier', 'temperature', 'top_logprobs', 'top_p', 'truncation', 'user',
-];
-/** The namespace the route requires function tools to be grouped in. */
-export const TOOL_NAMESPACE = { name: 'app', description: "The app's functions." };
+const NAMESPACE = 'coo';
+const OMIT = ['background', 'conversation', 'max_output_tokens', 'max_tool_calls', 'metadata', 'moderation', 'multi_agent', 'prompt',
+  'prompt_cache_retention', 'safety_identifier', 'temperature', 'top_logprobs', 'top_p', 'truncation', 'user', 'previous_response_id', 'service_tier'];
+const BLOCKED = new Set(['subscription_sharing_usage_limit_exceeded', 'subscription_sharing_user_not_eligible', 'subscription_sharing_invalid_user',
+  'chatpass_v2_scope_not_authorized', 'chatpass_v2_invalid_authorization_context']);
+const PROTOCOL_FAILURES = new Map([
+  ['Unknown Open Responses event type', 'event_type'],
+  ['Non-increasing event sequence', 'event_sequence'],
+  ['Invalid native Responses resource', 'response_resource'],
+  ['Event before response.created', 'response_created'],
+  ['Terminal response changed a closed item', 'terminal_item'],
+  ['Final content part disagrees with deltas', 'content_part'],
+  ['Final content disagrees with deltas', 'content'],
+  ['Final summary disagrees with deltas', 'summary'],
+  ['Final text disagrees with deltas', 'text'],
+  ['Terminal response contains unannounced output items', 'terminal_outputs'],
+  ['Final function arguments disagree with deltas', 'function_arguments'],
+  ['Final function identity changed', 'function_identity'],
+]);
 
-type Item = Record<string, unknown>;
-
-/** The request failed on the plan's usage limit, before the stream or inside it. */
-export function usageLimited(err: unknown): boolean {
-  return err instanceof GenerationError && (err.body.includes(USAGE_LIMIT) || err.message.includes(USAGE_LIMIT));
+export function subscriptionMessage(code: string): string {
+  if (code === 'subscription_sharing_usage_limit_exceeded') return 'ChatGPT 訂閱額度或此應用程式的用量上限已達限制。已停止請求，請查看 ChatGPT 用量設定。';
+  if (code === 'subscription_sharing_user_not_eligible') return '此帳號或工作區目前無法使用 ChatGPT 訂閱連線。';
+  if (code === 'subscription_sharing_unsupported_capability') return '此模型或請求功能不支援 ChatGPT 訂閱連線。';
+  if (code === 'subscription_sharing_usage_unavailable' || code === 'subscription_sharing_user_unavailable') return 'ChatGPT 暫時無法確認訂閱用量，請稍後重試。';
+  if (code === 'subscription_sharing_invalid_user' || code.startsWith('chatpass_v2_')) return 'ChatGPT 授權無法使用，請重新登入並確認訂閱授權。';
+  return `ChatGPT 訂閱請求未完成（${code}）。`;
 }
 
-/** `body` with its function and custom tools in `TOOL_NAMESPACE`, and the replayed calls of them naming it. */
-export function namespaced(body: Item): Item {
-  const tools = Array.isArray(body.tools) ? (body.tools as Item[]) : [];
-  const grouped = tools.filter((tool) => tool.type === 'function' || tool.type === 'custom');
-  if (!grouped.length) return body;
-  const names = new Set(grouped.map((tool) => tool.name));
-  return {
-    ...body,
-    tools: [...tools.filter((tool) => !grouped.includes(tool)), { type: 'namespace', ...TOOL_NAMESPACE, tools: grouped }],
-    input: (body.input as Item[]).map((item) =>
-      (item.type === 'function_call' || item.type === 'custom_tool_call') && names.has(item.name) ? { ...item, namespace: TOOL_NAMESPACE.name } : item),
+export function subscriptionBody(request: Request, options: GenerateOptions, media: ResponsesProviderOptions['media']): Record<string, unknown> {
+  const body = buildResponsesBody(request, options.context ? { ...options, context: sinceLastDelivery(options.context) } : options,
+    { media, reasoningReplay: 'encrypted' });
+  for (const key of OMIT) delete body[key];
+  body.store = false;
+  body.stream = true;
+  const tools = request.tools ?? [];
+  if (tools.some(tool => tool.type !== 'function')) throw new Error('ChatGPT 訂閱連線目前只提供本機 function tools。');
+  body.tools = tools.length ? [{ type: 'namespace', name: NAMESPACE, description: 'Local desktop companion tools.',
+    tools: tools.map(tool => ({ ...tool, strict: false })) }] : [];
+  body.input = (body.input as Record<string, unknown>[]).map(item => item.type === 'function_call' ? { ...item, namespace: NAMESPACE } : item);
+  if (typeof body.tool_choice === 'object' && body.tool_choice !== null && (body.tool_choice as { type?: string }).type === 'function')
+    body.tool_choice = { ...body.tool_choice, namespace: NAMESPACE };
+  return body;
+}
+
+/** Normalize the wire namespace consistently in delta items and the terminal response. */
+export function subscriptionEvent(raw: unknown): StreamEvent {
+  const event = structuredClone(raw) as Record<string, any>;
+  const normalize = (item: Record<string, any>) => {
+    if (item.type !== 'function_call') return item;
+    if (item.namespace != null && item.namespace !== NAMESPACE) throw new Error('ChatGPT 回傳未知的工具 namespace。');
+    if (typeof item.name === 'string' && item.name.startsWith(`${NAMESPACE}.`)) item.name = item.name.slice(NAMESPACE.length + 1);
+    delete item.namespace;
+    return item;
   };
+  if (event.item) event.item = normalize(event.item);
+  if (event.response?.output) event.response.output = event.response.output.map(normalize);
+  return event as StreamEvent;
 }
 
-/** The plan's models (`GET <baseUrl>/models`, `visibility: "list"`), in the order the service gives them. */
-export async function listPlanModels(baseUrl: string, token: string, fetchImpl: typeof fetch = fetch): Promise<ListedModel[]> {
-  const res = await fetchImpl(`${baseUrl.replace(/\/+$/, '')}/models`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error(`GET /models ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const body = await res.json() as { models?: Array<{ slug?: unknown; display_name?: unknown; visibility?: unknown }> };
-  if (!Array.isArray(body.models)) throw new Error('GET /models returned no models array');
-  return body.models.flatMap((m) => (m.visibility === 'list' && typeof m.slug === 'string' && m.slug
-    ? [{ id: m.slug, ...(typeof m.display_name === 'string' && m.display_name ? { displayName: m.display_name } : {}) }] : []));
+function errorCode(raw: unknown, fallback: string): string {
+  const error = raw as { error?: { code?: unknown }; code?: unknown };
+  const code = error?.error?.code ?? error?.code;
+  return typeof code === 'string' && /^(subscription_sharing_|chatpass_v2_)[a-z_]{1,80}$/.test(code) ? code : fallback;
 }
 
-export class ChatGPTResponses extends VendorResponses {
-  /** The access token of the request under way; the account refreshes it. */
-  private token = '';
+function bearerHeader(token: string): string {
+  if (typeof token !== 'string' || token.length > 16_384 || !/^[A-Za-z0-9._~+\/-]+=*$/.test(token)) throw new Error('ChatGPT 憑證格式不符，請重新登入。');
+  return `Bearer ${token}`;
+}
 
-  constructor(opts: Omit<ResponsesProviderOptions, 'apiKey'>, quirks: VendorQuirks, private readonly account: ChatGPTAccount, private readonly logger: Logger) {
-    super(opts, quirks);
-  }
+/** Subscription terminal receipts may omit output already delivered through output_item.done. */
+class ChatGPTResponseAssembly extends NativeResponseAssembly {
+  private announced = new Set<number>();
+  private finished = new Map<number, OutputItem>();
 
-  override async respond(request: Request, options: GenerateOptions = {}): Promise<Generation> {
-    for (;;) {
-      if (!options.diagnostic) for (let left; (left = this.account.pausedUntil - Date.now()) > 0;) await retryDelay(Math.min(left, 1000), options.signal);
-      try {
-        this.token = await this.account.accessToken();
-      } catch (err) {
-        const origin = options.origin ?? { instance: 'chatgpt', module: 'chatgpt', model: request.model ?? '', compatibilityDomain: this.baseUrl };
-        // a signed-out account or a refused refresh is 401 / 400 and ends the batch; an unreachable token endpoint is retried
-        const status = err instanceof ChatGPTAuthError ? err.status : 0;
-        throw new GenerationError(`ChatGPT sign-in: ${err instanceof Error ? err.message : String(err)}`, [], null, origin, status, '', { cause: err });
-      }
-      try {
-        // the route answers streams only
-        return await super.respond(request, { ...options, onEvent: options.onEvent ?? (() => {}) });
-      } catch (err) {
-        if (!usageLimited(err)) throw err;
-        this.pause((err as GenerationError).attempts.at(-1)?.requestId ?? null);
-        if (options.diagnostic || options.signal?.aborted || (err as GenerationError).partial?.output.length) throw err;
-      }
+  override feed(payload: unknown, emit: (event: StreamEvent) => void): void {
+    let event = payload as StreamEvent;
+    if (event?.type === 'response.completed' && event.response.status === 'completed' && event.response.output.length === 0
+      && this.announced.size > 0 && this.finished.size === this.announced.size) {
+      const rows = [...this.finished.entries()].sort(([a], [b]) => a - b);
+      if (rows.every(([index], ordinal) => index === ordinal))
+        event = { ...event, response: { ...event.response, output: rows.map(([, item]) => item) } };
     }
+    const done = event?.type === 'response.output_item.done' ? structuredClone(event.item) : null;
+    super.feed(event, emit);
+    if (event.type === 'response.output_item.added') this.announced.add(event.output_index);
+    if (event.type === 'response.output_item.done') this.finished.set(event.output_index, done!);
   }
+}
 
-  /** Starts the pause after the usage limit, unless one is under way. */
-  private pause(requestId: string | null): void {
-    if (Date.now() < this.account.pausedUntil) return;
-    this.account.pausedUntil = Date.now() + USAGE_PAUSE_MS;
-    this.logger.warn(`ChatGPT 套餐用量已达上限(${USAGE_LIMIT}),${USAGE_PAUSE_MS / 60_000} 分钟内不再发请求`, { code: USAGE_LIMIT, requestId });
-  }
+export async function listChatGPTModels(session: ChatGPTSession, fetchImpl: typeof fetch = fetch): Promise<ListedModel[]> {
+  const token = await session.token();
+  const signals = [session.signal?.(), AbortSignal.timeout(20_000)].filter((signal): signal is AbortSignal => Boolean(signal));
+  const response = await fetchImpl(`${CHATGPT_BASE_URL}/models`, { headers: { Authorization: bearerHeader(token.accessToken) }, redirect: 'error', signal: AbortSignal.any(signals) });
+  if (!response.ok) throw new Error(`無法取得 ChatGPT 訂閱模型（${response.status}）。`);
+  let data: { models?: Array<{ slug?: unknown; display_name?: unknown; visibility?: unknown; context_window?: unknown; input_modalities?: unknown }> };
+  try { data = await response.json() as typeof data; } catch { throw new Error('ChatGPT 訂閱模型清單格式不符。'); }
+  if (!Array.isArray(data.models)) throw new Error('ChatGPT 訂閱模型清單格式不符。');
+  return data.models.filter(row => row.visibility === 'list' && typeof row.slug === 'string').map(row => ({ id: row.slug as string,
+    displayName: typeof row.display_name === 'string' ? row.display_name : row.slug as string,
+    ...(typeof row.context_window === 'number' && row.context_window > 0 ? { contextWindow: row.context_window } : {}),
+    ...(Array.isArray(row.input_modalities) ? { inputImages: row.input_modalities.includes('image') } : {}),
+  }));
+}
 
-  /**
-   * The standard assembly, which also starts the pause at a failure event of the usage limit. The route's
-   * terminal response carries an empty `output`; it is filled from the `output_item.done` items, by output
-   * index, before the event goes on. A completed or incomplete response is filled only when every announced
-   * item is done; a failed one takes the unfinished items as streamed so far. Indices with a gap, or a
-   * terminal `output` that is not empty, go on unchanged.
-   */
-  protected override responseAssembly(): ResponseAssembly {
-    const inner = super.responseAssembly();
-    const announced = new Set<number>();
-    const done = new Map<number, unknown>();
-    return {
-      feed: (payload, emit) => {
-        const event = payload as { type?: unknown; output_index?: number; item?: unknown; response?: { output?: unknown } } | null;
-        const type = event?.type;
-        if ((type === 'response.failed' || type === 'error') && JSON.stringify(payload).includes(USAGE_LIMIT)) this.pause(null);
-        if ((type === 'response.completed' || type === 'response.incomplete' || type === 'response.failed')
-          && Array.isArray(event!.response?.output) && !event!.response.output.length && announced.size) {
-          const streamed = type === 'response.failed' ? inner.snapshot()?.output : undefined;
-          const output = Array.from({ length: announced.size }, (_, i) => done.get(i) ?? (announced.has(i) ? streamed?.[i] : undefined));
-          if (!output.includes(undefined)) payload = { ...event, response: { ...event!.response, output } };
+export class ChatGPTClient extends BaseProvider {
+  constructor(private readonly session: ChatGPTSession, private readonly media: ResponsesProviderOptions['media'],
+    private readonly onBlocked: (message: string) => void, private readonly fetchImpl: typeof fetch = fetch) { super(); }
+
+  async respond(request: Request, options: GenerateOptions = {}): Promise<Generation> {
+    const origin = options.origin ?? { instance: 'chatgpt-plan', module: 'chatgpt-plan', model: request.model ?? '', compatibilityDomain: 'chatgpt-plan' };
+    const attempts: ProviderAttempt[] = [];
+    const generationId = randomUUID();
+    const body = subscriptionBody(request, options, this.media);
+    for (let ordinal = 0; ordinal < 2; ordinal++) {
+      const assembly = new ChatGPTResponseAssembly();
+      const started = Date.now();
+      const attempt: ProviderAttempt = { id: randomUUID(), generationId, ordinal, origin, startedAt: new Date().toISOString(), elapsedMs: 0,
+        requestId: null, responseId: null, outcome: 'failed', status: null, serviceTier: null, purpose: options.diagnostic ? 'diagnostic' : 'generation', meters: unknownMeters(), charges: [] };
+      const timeout = new AbortController();
+      const signals = [options.signal, this.session.signal?.(), timeout.signal].filter((signal): signal is AbortSignal => Boolean(signal));
+      const signal = AbortSignal.any(signals);
+      let timer = setTimeout(() => timeout.abort(new Error('ChatGPT 回應逾時。')), 300_000);
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      let phase = 'authentication';
+      try {
+        signal.throwIfAborted();
+        const token = await this.session.token(ordinal > 0);
+        signal.throwIfAborted();
+        phase = 'request';
+        const response = await this.fetchImpl(`${CHATGPT_BASE_URL}/responses`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: bearerHeader(token.accessToken) },
+          body: requestJson(body), redirect: 'error', signal });
+        attempt.status = response.status;
+        attempt.requestId = response.headers.get('x-request-id');
+        if (response.status === 401 && ordinal === 0) { await response.body?.cancel(); continue; }
+        if (!response.ok) {
+          let raw: unknown = null;
+          try { raw = await response.json(); } catch { /* Do not record upstream HTML or credentials. */ }
+          const code = errorCode(raw, `http_${response.status}`);
+          if (BLOCKED.has(code)) this.onBlocked(subscriptionMessage(code));
+          throw new GenerationError(subscriptionMessage(code), attempts, null, origin, response.status, JSON.stringify({ error: { code } }));
         }
-        inner.feed(payload, emit);
-        if (type === 'response.output_item.added') announced.add(event!.output_index!);
-        if (type === 'response.output_item.done') done.set(event!.output_index!, event!.item);
-      },
-      finish: (emit) => inner.finish(emit),
-      snapshot: () => inner.snapshot(),
-      meters: () => inner.meters(),
-      serviceTier: () => inner.serviceTier(),
-    };
-  }
-
-  protected override headers(): Record<string, string> {
-    if (Date.now() < this.account.pausedUntil)
-      throw new LLMError('ChatGPT plan usage limit reached; requests are paused', 429, JSON.stringify({ error: { code: USAGE_LIMIT } }));
-    return { ...super.headers(), Authorization: `Bearer ${this.token}` };
-  }
-
-  /** Cortico calls this after a 401 or a 403 without the body, so a 403 such as `subscription_sharing_user_not_eligible` also costs one refresh. */
-  protected override async onAuthError(): Promise<boolean> {
-    try {
-      this.token = await this.account.accessToken(this.token);
-      return true;
-    } catch {
-      return false;
+        if (!response.body) throw new Error('ChatGPT 未回傳串流內容。');
+        phase = 'stream';
+        reader = response.body.getReader();
+        const frames = new EventDecoder();
+        const decoder = new TextDecoder();
+        let terminal = false;
+        read: for (;;) {
+          const chunk = await reader.read();
+          clearTimeout(timer);
+          timer = setTimeout(() => timeout.abort(new Error('ChatGPT 串流回應逾時。')), 120_000);
+          if (chunk.done) break;
+          for (const payload of frames.feed(decoder.decode(chunk.value, { stream: true }))) {
+            if (payload === '[DONE]') break read;
+            let raw: Record<string, any>;
+            try { raw = JSON.parse(payload); } catch { throw new Error('ChatGPT 串流格式不符，未記錄回應原文。'); }
+            if (raw.type === 'response.failed' || raw.type === 'error') {
+              const code = errorCode(raw.response ?? raw, 'response_failed');
+              if (BLOCKED.has(code)) this.onBlocked(subscriptionMessage(code));
+              throw new GenerationError(subscriptionMessage(code), attempts, assembly.snapshot(), origin, response.status, JSON.stringify({ error: { code } }));
+            }
+            if (raw.type === 'response.incomplete') {
+              const reason = raw.response?.incomplete_details?.reason;
+              const detail = reason === 'max_output_tokens' || reason === 'content_filter' ? `（${reason}）` : '';
+              throw new GenerationError(`ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, assembly.snapshot(), origin, response.status);
+            }
+            const event = subscriptionEvent(raw);
+            assembly.feed(event, event => options.onEvent?.(event));
+            if (event.type === 'response.completed' || event.type === 'response.incomplete') { terminal = true; break read; }
+          }
+        }
+        if (!terminal) throw new Error('ChatGPT 串流中斷，未收到完整回覆。');
+        phase = 'completion';
+        const result = assembly.finish();
+        attempt.responseId = result.id;
+        attempt.outcome = result.status === 'completed' ? 'completed' : 'incomplete';
+        if (result.status !== 'completed') {
+          const reason = result.incomplete_details?.reason;
+          const detail = reason === 'max_output_tokens' || reason === 'content_filter' ? `（${reason}）` : '';
+          throw new GenerationError(`ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, result, origin, response.status);
+        }
+        return { response: result, origin, attempts };
+      } catch (error) {
+        attempt.outcome = options.signal?.aborted ? 'aborted' : attempt.outcome;
+        if (error instanceof GenerationError) throw error;
+        const message = error instanceof ResponseProtocolError ? `ChatGPT 回應格式不符（${PROTOCOL_FAILURES.get(error.message) ?? 'response_protocol'}）。`
+          : error instanceof Error && error.message.startsWith('ChatGPT ') ? error.message : `ChatGPT 訂閱連線失敗（${phase}），未記錄原始錯誤內容。`;
+        throw new GenerationError(message, attempts, assembly.snapshot(), origin, attempt.status ?? 0);
+      } finally {
+        clearTimeout(timer);
+        attempt.elapsedMs = Date.now() - started;
+        attempt.meters = assembly.meters();
+        attempt.serviceTier = assembly.serviceTier();
+        if (reader) { try { await reader.cancel(); } catch { /* Already closed. */ } reader.releaseLock(); }
+        attempts.push(attempt);
+      }
     }
-  }
-
-  protected override buildResponseBody(request: Request, options: GenerateOptions): Record<string, unknown> {
-    const body = super.buildResponseBody(request, options);
-    for (const key of UNSUPPORTED) delete body[key];
-    return namespaced(body);
+    throw new GenerationError('ChatGPT 登入無法使用，請重新登入。', attempts, null, origin, 401);
   }
 }

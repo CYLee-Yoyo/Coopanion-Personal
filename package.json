@@ -1,9 +1,9 @@
 {
-  "name": "coopanion",
-  "productName": "Coopanion",
-  "version": "0.1.27",
+  "name": "coopanion-personal",
+  "productName": "Coopanion Personal",
+  "version": "0.1.27-personal.1",
   "private": true,
-  "description": "A desktop companion built on Cortico: a pet on your screen that talks, listens and can operate the computer",
+  "description": "Local personal Coopanion with ChatGPT subscription sign-in",
   "license": "AGPL-3.0-or-later",
   "author": "Pal-AI-Lab",
   "homepage": "https://github.com/Pal-AI-Lab/Coopanion",
@@ -30,6 +30,7 @@
     "cortico-world-desktop-pet": "workspace:*",
     "electron-updater": "^6.8.9",
     "express": "^4.22.3",
+    "jose": "6.2.12",
     "pnpm": "11.5.0",
     "tsx": "^4.23.15",
     "ws": "^8.21.3"
@@ -57,5 +58,8 @@
     "tar-stream": "3.2.1",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
+  },
+  "coopanion": {
+    "channel": "personal"
   }
 }

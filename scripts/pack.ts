@@ -47,7 +47,7 @@ const WORKSPACE = ['cortico-world-desktop-pet', 'cortico-provider-coo'];
  * (app/updater.cjs) or for Steam steamworks.js (app/steam.cjs), and the workspace packages' own.
  */
 const DEPS: Record<string, string> = {
-  express: '^4.22.3', ws: '^8.21.3', tsx: '^4.23.15', pnpm: '11.5.0',
+  express: '^4.22.3', ws: '^8.21.3', tsx: '^4.23.15', pnpm: '11.5.0', jose: '6.2.12',
   ...STEAM ? { 'steamworks.js': '0.4.0' } : { 'electron-updater': '^6.8.9' },
 };
 for (const name of WORKSPACE) {
@@ -77,7 +77,7 @@ writeFileSync(join(OUT, 'package.json'), JSON.stringify({
   name: rootPkg.name, productName: rootPkg.productName, version: rootPkg.version, description: rootPkg.description,
   license: rootPkg.license, author: rootPkg.author, homepage: rootPkg.homepage, type: 'module', main: 'app/main.cjs',
   dependencies: DEPS,
-  coopanion: STEAM ? { channel: 'steam', steamAppId: STEAM_APP_ID } : { channel: 'github' },
+  coopanion: { channel: 'personal' },
 }, null, 2));
 run('npm', ['install', '--omit=dev', '--no-package-lock', '--no-audit', '--no-fund', '--loglevel=error', `--os=${process.platform}`, `--cpu=${ARCH}`], OUT);
 if (STEAM) {

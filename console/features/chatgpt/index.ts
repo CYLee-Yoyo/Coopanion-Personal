@@ -1,8 +1,7 @@
 /**
- * A ChatGPT plan's sign-in in the settings window: on the Start page's ChatGPT pick and in the advanced
- * editor of a `chatgpt` endpoint. The authorization page opens in the system browser (the main
- * process sends every page off the console there); the sign-in runs in the Core, in Coo Pet
- * Provider's `chatgpt` module, through its console methods (`connect.ts`).
+ * Account controls for the advanced editor of a `chatgpt-plan` endpoint. The panel exposes public
+ * state; Electron main owns authorization, the callback and encrypted credentials. The Start page's
+ * account and model controls live in features/home/chatgpt.ts.
  */
 import type { ConsoleUi } from 'cortico/web/shared/client-panel.ts';
 import { chatgptState, signInChatGPT, signOutChatGPT, type SignInState } from 'cortico-provider-coo/src/connect.ts';

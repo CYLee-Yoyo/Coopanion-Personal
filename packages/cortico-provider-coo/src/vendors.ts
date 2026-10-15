@@ -244,7 +244,7 @@ export const VENDORS: readonly Vendor[] = [
 ];
 
 /** The provider module of a signed-in ChatGPT plan's endpoint (`chatgpt/index.ts`). */
-export const CHATGPT_MODULE = 'chatgpt';
+export const CHATGPT_MODULE = 'chatgpt-plan';
 
 /**
  * A ChatGPT plan, signed in with the account (Sign in with ChatGPT): OpenAI's API and models, billed
@@ -265,7 +265,7 @@ export const regionsOf = (v: Vendor): Region[] => ('global' in v.sites ? [] : [.
 export const siteOf = (v: Vendor, region: Region): Site => ('global' in v.sites ? v.sites.global : v.sites[region]);
 
 /** The name of the app's endpoint for `v` on `region`: the id, with `-intl` for an international platform. */
-export const endpointName = (v: Vendor, region: Region): string => ('global' in v.sites || region === 'cn' ? v.id : `${v.id}-intl`);
+export const endpointName = (v: Vendor, region: Region): string => (v === CHATGPT ? CHATGPT_MODULE : 'global' in v.sites || region === 'cn' ? v.id : `${v.id}-intl`);
 
 /** The effort values `v` takes for `model` on `site`. */
 export const effortOf = (v: Vendor, site: Site, model: string): EffortMap | undefined => v.modelEffort?.[model] ?? site.effort ?? v.effort;

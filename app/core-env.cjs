@@ -31,21 +31,22 @@ async function systemProxyEnvironment(env, resolveProxy) {
   if (PROXY_VARS.some(k => env[k])) return { vars: {}, note: 'proxy: environment variables' };
   let rule;
   let timer;
+  let timedOut = false;
   try {
     rule = await Promise.race([
       resolveProxy(PROBE_URL),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`timed out after ${PROXY_LOOKUP_MS} ms`)), PROXY_LOOKUP_MS); }),
+      new Promise((_, reject) => { timer = setTimeout(() => { timedOut = true; reject(new Error('Proxy lookup timed out')); }, PROXY_LOOKUP_MS); }),
     ]);
-  } catch (e) {
-    return { vars: {}, note: `proxy: none (system proxy lookup failed: ${e instanceof Error ? e.message : e})` };
+  } catch {
+    return { vars: {}, note: `proxy: none (system proxy lookup ${timedOut ? 'timed out' : 'failed'})` };
   } finally { clearTimeout(timer); }
   const first = rule.split(';')[0].trim();
   const [scheme, host] = first.split(/\s+/);
   if ((scheme === 'PROXY' || scheme === 'HTTPS') && host) {
     const url = `${scheme === 'HTTPS' ? 'https' : 'http'}://${host}`;
-    return { vars: Object.fromEntries(PROXY_VARS.map(k => [k, url])), note: `proxy: system ${first}` };
+    return { vars: Object.fromEntries(PROXY_VARS.map(k => [k, url])), note: `proxy: system ${scheme}` };
   }
-  if (scheme?.startsWith('SOCKS')) return { vars: {}, note: `proxy: none (system proxy ${first} is SOCKS, which Node cannot use)` };
+  if (scheme?.startsWith('SOCKS')) return { vars: {}, note: 'proxy: none (system proxy uses unsupported SOCKS)' };
   return { vars: {}, note: 'proxy: none' };
 }
 

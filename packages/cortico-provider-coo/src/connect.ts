@@ -6,6 +6,7 @@
  * console's own api in the browser); nothing here imports Node or the DOM.
  */
 import { CHATGPT, CHATGPT_MODULE, chatgptEntry, connectionVendor, endpointName, vendorEntry, type Region, type Vendor } from './vendors.ts';
+import type { ChatGPTStatus } from './chatgpt/types.ts';
 
 /** GET when `body` is left out, POST otherwise; throws on an error status. */
 export type ConsoleCall = <T>(path: string, body?: unknown) => Promise<T>;
@@ -88,7 +89,7 @@ async function testAndStart(call: ConsoleCall, name: string): Promise<ConnectRes
   return r;
 }
 
-/** A ChatGPT endpoint's sign-in as its `state` method reports it (`SignInStatus` in chatgpt/auth.ts). */
+/** Public account state for the guide and advanced editor. Credentials remain in Electron main. */
 export interface SignInState {
   signedIn: boolean;
   email: string | null;
@@ -98,36 +99,44 @@ export interface SignInState {
   models?: string[];
 }
 
-/** The console panel of the `chatgpt` module's sign-in methods. */
-export const SIGN_IN_PANEL = 'chatgpt';
+/** The console panel of the personal subscription provider. */
+export const SIGN_IN_PANEL = 'auth';
 
 /** The console route of a sign-in method of the `chatgpt` module. */
 const signInRoute = (method: string) => `/api/console/providers/${encodeURIComponent(`llm:${CHATGPT_MODULE}`)}/panels/${SIGN_IN_PANEL}/${method}`;
 
-export const chatgptState = (call: ConsoleCall, name: string) => call<SignInState>(signInRoute('state'), { args: [name] });
+const signInState = (state: ChatGPTStatus): SignInState => ({
+  signedIn: state.sharing,
+  email: state.email,
+  phase: state.pending ? 'waiting' : state.error ? 'failed' : state.sharing ? 'done' : 'idle',
+  reason: state.error,
+});
+
+export const chatgptState = async (call: ConsoleCall, _name: string): Promise<SignInState> =>
+  signInState(await call<ChatGPTStatus>(signInRoute('state'), { args: [] }));
 
 /** Revokes and removes the tokens of the ChatGPT endpoint `name`. */
-export const signOutChatGPT = (call: ConsoleCall, name: string) => call<SignInState>(signInRoute('signOut'), { args: [name] });
+export const signOutChatGPT = async (call: ConsoleCall, _name: string): Promise<SignInState> =>
+  signInState(await call<ChatGPTStatus>(signInRoute('signout'), { args: [] }));
 
 /** How often a sign-in under way is looked at. */
 const SIGN_IN_POLL_MS = 1000;
 
 const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((done, fail) => {
   if (signal?.aborted) return fail(new Error('cancelled'));
-  const timer = setTimeout(done, ms);
-  signal?.addEventListener('abort', () => { clearTimeout(timer); fail(new Error('cancelled')); }, { once: true });
+  const abort = () => { clearTimeout(timer); fail(new Error('cancelled')); };
+  const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); done(); }, ms);
+  signal?.addEventListener('abort', abort, { once: true });
 });
 
 interface SignInOptions { signal?: AbortSignal; pollMs?: number }
 
 /**
- * Signs the saved ChatGPT endpoint `name` in: `open` takes the authorization URL to the system
- * browser, and the sign-in is looked at until the browser comes back, it fails or times out
- * (`SIGN_IN_MS` in chatgpt/auth.ts), or `signal` aborts the wait (which throws).
+ * Electron main opens the authorization page and owns the callback. The caller polls public state;
+ * leaving the caller stops that wait without exporting an authorization URL or credentials.
  */
-export async function signInChatGPT(call: ConsoleCall, name: string, open: (url: string) => void, opts: SignInOptions = {}): Promise<SignInState> {
-  const { url } = await call<{ url: string }>(signInRoute('signIn'), { args: [name] });
-  open(url);
+export async function signInChatGPT(call: ConsoleCall, name: string, _open: (url: string) => void, opts: SignInOptions = {}): Promise<SignInState> {
+  await call(signInRoute('signin'), { args: [] });
   let state: SignInState;
   do {
     await wait(opts.pollMs ?? SIGN_IN_POLL_MS, opts.signal);
@@ -137,26 +146,23 @@ export async function signInChatGPT(call: ConsoleCall, name: string, open: (url:
 }
 
 /**
- * Signs the ChatGPT endpoint `name` in (`signInChatGPT`), creating the app's endpoint the first time,
- * and once it is in and its test passes makes it active and resumes the run. When the plan's model
- * list leaves out the endpoint's model, the endpoint takes the first model it lists.
+ * Connects the personal subscription endpoint using the account's catalog. A saved available model
+ * is retained; a new endpoint takes the first available model. Only a successful test starts the run.
  */
 export async function connectChatGPT(call: ConsoleCall, open: (url: string) => void, opts: SignInOptions & { name?: string } = {}): Promise<ConnectResult> {
   const name = opts.name ?? endpointName(CHATGPT, 'cn');
+  if (name !== CHATGPT_MODULE) return { ok: false, ms: null, why: 'Unknown personal subscription endpoint' };
   try {
     const list = await call<{ providers: Array<{ name: string }> }>('/api/providers');
     if (!list.providers.some((p) => p.name === name)) await call('/api/providers', { name, entry: chatgptEntry() });
     const state = await signInChatGPT(call, name, open, opts);
     if (state.phase !== 'done' || !state.signedIn) return { ok: false, ms: null, why: state.reason ?? state.phase };
-    const first = state.models?.[0];
-    if (first) {
-      const d = await call<Detail>(`/api/providers/${encodeURIComponent(name)}`);
-      const spec = d.entry.spec as Record<string, unknown> | undefined;
-      if (!state.models!.includes(String(spec?.model ?? ''))) {
-        const entry = { ...d.entry, spec: { ...spec, model: first }, multimodal: (CHATGPT.vision ?? []).includes(first) };
-        await call(`/api/providers/${encodeURIComponent(name)}/save`, { name: d.name, entry, expectedRevision: d.revision });
-      }
-    }
+    const models = await call<Array<{ id: string }>>(signInRoute('models'), { args: [] });
+    if (!models.length) return { ok: false, ms: null, why: 'No subscription models available' };
+    const d = await call<Detail>(`/api/providers/${encodeURIComponent(name)}`);
+    const selected = String((d.entry.spec as Record<string, unknown> | undefined)?.model ?? '');
+    const model = models.find(row => row.id === selected)?.id ?? models[0]!.id;
+    await call(signInRoute('select'), { args: [model] });
   } catch (err) {
     return { ok: false, ms: null, why: errText(err) };
   }

@@ -17,6 +17,9 @@ import { loadDeployment } from 'cortico/deploy.ts';
 import { loadExtensions } from 'cortico/extensions.ts';
 import { withWorlds, type WorldDefinition } from 'cortico/world.ts';
 import { TERMINAL } from 'cortico/worlds/terminal/definition.ts';
+import { noticeDefinition } from '../core/notice.ts';
+import { UpstreamWatch } from '../core/upstream-watch.ts';
+import { UPSTREAM_BASE } from '../core/personal-upstream.ts';
 
 const CORTICO = resolve(import.meta.dirname, '../vendor/cortico');
 const PROBE_PAGE = 'world:probe';
@@ -51,6 +54,7 @@ const PROBE: WorldDefinition = {
 let dir: string;
 let bot: Bot<CoreConfig>;
 let base: string;
+let releaseWatch: UpstreamWatch;
 
 const get = (path: string) => fetch(`${base}${path}`);
 const post = (path: string, body?: unknown) => fetch(`${base}${path}`, {
@@ -65,9 +69,18 @@ beforeAll(async () => {
   mkdirSync(join(dir, 'providers', 'fixture'), { recursive: true });
   // a closed local port: the endpoint test fails without leaving the machine
   writeFileSync(join(dir, 'providers', 'fixture', 'config.json'), JSON.stringify({ kind: 'openai-responses-compat', baseUrl: 'http://127.0.0.1:9/v1', spec: { model: 'test-model', thinking: false } }));
-  writeFileSync(join(dir, 'config.json'), JSON.stringify({ activeProvider: 'fixture' }));
+  writeFileSync(join(dir, 'config.json'), JSON.stringify({ activeProvider: 'fixture', worlds: { coopanion: { enabled: true } } }));
+  releaseWatch = new UpstreamWatch({ dir: join(dir, 'release-watch'), installedVersion: 'fixture', language: () => 'en',
+    subscription: () => null, paused: () => true, canNotify: () => false,
+    notify: () => ({ answer: Promise.resolve('closed'), close() {} }),
+    source: { latest: async () => ({ version: UPSTREAM_BASE.version, tag: `v${UPSTREAM_BASE.version}`, title: '', notes: '',
+      url: `https://github.com/Pal-AI-Lab/Coopanion/releases/tag/v${UPSTREAM_BASE.version}`, publishedAt: null }),
+    diff: async () => { throw new Error('No newer release'); } },
+  });
+  const notice = noticeDefinition({ version: 'dev', notesDir: dir, stateFile: join(dir, 'notice.json'), alarmsFile: join(dir, 'alarms.json'),
+    newInstall: () => true, read: () => undefined, petConnected: () => false, guiding: () => false, label: () => 'Fixture notices', upstream: () => releaseWatch });
   const cormini = (await import(join(CORTICO, 'bots', 'cormini', 'index.ts'))).default as BotDefinition<CoreConfig>;
-  const definition = withWorlds({ ...cormini, declares: [...(cormini.declares ?? []), PROBE.id] }, [TERMINAL, PROBE] as WorldDefinition[]);
+  const definition = withWorlds({ ...cormini, declares: [...(cormini.declares ?? []), PROBE.id, notice.id] }, [TERMINAL, PROBE, notice] as WorldDefinition[]);
   const loaded = loadDeployment(definition, dir, CORTICO);
   loaded.config.web.port = 0;
   process.env.CORTICO_EXTENSIONS_DIR = join(dir, 'extensions');
@@ -260,6 +273,20 @@ describe('the console API the settings window reads', () => {
     const failed = await json(await post(`${route}/fail`, { args: [] }));
     expect(failed.status).toBeGreaterThanOrEqual(400);
     expect(failed.body.error).toEqual(expect.any(String));
+  });
+
+  it('release tracking uses the public panel contract and exposes no installation operation', async () => {
+    const route = `/api/console/providers/${encodeURIComponent('world:coopanion')}/panels/updates`;
+    const state = await json(await post(`${route}/state`, { args: [] }));
+    expect(state.status).toBe(200);
+    expect(state.body).toMatchObject({ baseline: UPSTREAM_BASE.version, intervalHours: 6, enabled: true });
+    expect((await json(await post(`${route}/enabled`, { args: [false] }))).body.enabled).toBe(false);
+    expect((await json(await post(`${route}/check`, { args: [] }))).body.enabled).toBe(false);
+    const unavailable = await json(await post(`${route}/install`, { args: [] }));
+    expect(unavailable.status).toBeGreaterThanOrEqual(400);
+    expect(unavailable.body.error).toEqual(expect.any(String));
+    expect((await json(await post(`${route}/request`, { args: [] }))).body).toBeNull();
+    expect((await json(await post(`${route}/enabled`, { args: [true] }))).body.enabled).toBe(true);
   });
 
   it('panel stream: a WebSocket on the panel route carries the World\'s frames both ways', async () => {

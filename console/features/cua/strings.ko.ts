@@ -1,6 +1,9 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  applying: '컴퓨터 사용 설정 적용 중…',
+  applied: '컴퓨터 사용 설정이 적용되었습니다.',
+  applyFailed: (why: string) => `설정은 저장되었지만 적용하지 못했습니다: ${why}`,
   title: '컴퓨터 사용',
   enabled: 'Coo가 이 컴퓨터를 사용하도록 허용',
   control: '마우스와 키보드 허용',

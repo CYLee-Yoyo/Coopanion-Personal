@@ -1,6 +1,9 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  applying: 'Einstellungen zur Computersteuerung werden angewendet…',
+  applied: 'Einstellungen zur Computersteuerung angewendet.',
+  applyFailed: (why: string) => `Einstellungen gespeichert, aber nicht angewendet: ${why}`,
   title: 'Computersteuerung',
   enabled: 'Coo diesen Computer benutzen lassen',
   control: 'Maus und Tastatur erlauben',

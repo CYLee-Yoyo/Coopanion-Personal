@@ -8,7 +8,7 @@ import type { Language } from 'cortico/core/language.ts';
 import { modelLanguage, type ModelLanguage } from './language.ts';
 
 export const DEPLOYMENT = 'companion';
-export const CONSOLE_PORT = 17788;
+export const CONSOLE_PORT = 17888;
 export const DISPLAY_NAME = 'Coo';
 /** The provider module of the app's endpoints (cortico-provider-coo). */
 export const MODULE = 'coo';

@@ -1,6 +1,9 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  applying: '正在套用電腦操作設定…',
+  applied: '電腦操作設定已套用。',
+  applyFailed: (why: string) => `設定已儲存，但套用失敗：${why}`,
   title: '電腦操作',
   enabled: '讓 Coo 操作這台電腦',
   control: '允許操作滑鼠和鍵盤',

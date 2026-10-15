@@ -4,6 +4,9 @@
  * boxes, and what text can be selected. Only the theme's color variables are used.
  */
 
+/* The palette supplies readable text on its accent in both colour modes. */
+:root .btn.primary, :root .btn.primary:hover { color: var(--on-accent); }
+
 /* ---------- compact navigation ---------- */
 body.companion-sidebar { display: flex; height: 100dvh; overflow: hidden; }
 #rail {
@@ -227,6 +230,20 @@ input, textarea, [contenteditable]:not([contenteditable="false"]), [contentedita
 
 /* 换模式时只藏起普通模式不列的项(rail/index.ts),导航项自带 display,要显式让 hidden 生效 */
 #rail nav.stack .navitem[hidden], #rail nav.stack .navgroup[hidden] { display: none; }
+
+.upstream-meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .5rem 1.5rem; }
+.upstream-meta dt { color: var(--muted-foreground); }
+.upstream-meta dd { margin: 0; overflow-wrap: anywhere; }
+.upstream-page .sheetbody > section { margin: 1rem 0; }
+.upstream-page li { margin: .35rem 0; overflow-wrap: anywhere; }
+.upstream-page details { margin: 1rem 0; }
+.upstream-page summary { cursor: pointer; }
+.upstream-notes { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.upstream-files { max-height: 22rem; overflow: auto; font-family: var(--font-mono, monospace); font-size: .9em; }
+.upstream-codes { color: var(--muted-foreground); font-family: var(--font-mono, monospace); }
+.upstream-keep { margin: .65rem 0; }
+.upstream-page textarea { width: 100%; margin: .75rem 0; }
+.upstream-page .rowbar { flex-wrap: wrap; }
 
 /* ---------- checkboxes and radio buttons: drawn here, in exactly the switches' green (var(--accent)) in every scheme ----------
    the browser's own boxes (accent-color) pick their own shade and check color; switches are drawn elsewhere and left out.

@@ -1,6 +1,7 @@
 /**
  * 字标下面那一行:当前版本与项目地址;GitHub 上最新的正式 Release 比当前版本新时,再多一行去下载的链接。
- * Steam 版由 Steam 更新,不查。版本号与渠道由 scripts/stage.ts 写进 app-version.ts。查询失败就只显示当前版本。
+ * Steam 版由 Steam 更新,不查。Personal 版链接到本机原版更新页，查询与分析由 Core 管理。
+ * 版本号与渠道由 scripts/stage.ts 写进 app-version.ts。查询失败就只显示当前版本。
  */
 import { APP_CHANNEL, APP_VERSION } from '../app-version.ts';
 import { S } from './strings.ts';
@@ -31,6 +32,7 @@ export function isNewer(latest: string, current: string): boolean {
 let pending: Promise<ReleaseUpdate | null> | null = null;
 
 export function checkRelease(): Promise<ReleaseUpdate | null> {
+  if (APP_CHANNEL !== 'github') return Promise.resolve(null);
   pending ??= fetch(RELEASE_API, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(RELEASE_TIMEOUT_MS) })
     .then((res) => (res.ok ? res.json() as Promise<{ tag_name?: unknown; html_url?: unknown }> : null))
     .then((release) => {
@@ -55,6 +57,14 @@ function link(doc: Document, className: string, text: string, href: string): HTM
 
 /** 把版本行放进字标容器;有新版本时把下载链接交给 `onUpdate`。 */
 export function mountRelease(doc: Document, brand: Element, onUpdate: (link: HTMLAnchorElement) => void, signal: AbortSignal): void {
+  if (APP_CHANNEL === 'personal') {
+    const version = doc.createElement('a');
+    version.className = 'companion-version';
+    version.textContent = `v${APP_VERSION} · Personal`;
+    version.href = '#/updates';
+    brand.appendChild(version);
+    return;
+  }
   const repo = link(doc, 'companion-version', `v${APP_VERSION} · GitHub`, REPO_URL);
   repo.title = S.repoHint;
   brand.appendChild(repo);

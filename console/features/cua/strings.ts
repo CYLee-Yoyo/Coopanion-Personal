@@ -11,6 +11,9 @@ import { S as ru } from './strings.ru.ts';
 
 const zh = {
   title: '电脑操作',
+  applying: '正在应用电脑操作设置…',
+  applied: '电脑操作设置已应用。',
+  applyFailed: (why: string) => `设置已保存，但应用失败：${why}`,
   enabled: '让 Coo 操作这台电脑',
   control: '允许操作鼠标和键盘',
   controlHint: '关闭时只能查看屏幕。',
@@ -33,6 +36,9 @@ const zh = {
 
 export const en: typeof zh = {
   title: 'Computer use',
+  applying: 'Applying computer-use settings…',
+  applied: 'Computer-use settings applied.',
+  applyFailed: (why: string) => `Settings saved, but could not apply them: ${why}`,
   enabled: 'Let Coo use this computer',
   control: 'Allow the mouse and keyboard',
   controlHint: 'When off, Coo can only look at the screen.',

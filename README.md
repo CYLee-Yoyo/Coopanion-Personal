@@ -1,3 +1,17 @@
+<!-- Personal build: app/chatgpt-auth.cjs, scripts/check-personal-push.mjs and packages/cortico-provider-coo/src/chatgpt/ -->
+
+This personal build tracks upstream v0.1.27 with Cortico v0.1.16, including prompt-editor undo/redo, system proxy support, voice-input safeguards and chat fixes. It retains the personal build's encrypted ChatGPT login, strict stream validation, separate data and subscription-only release reviews. Proxy startup logs omit endpoints and lookup error details.
+
+**Coopanion Personal — personal fork of [Pal-AI-Lab/Coopanion](https://github.com/Pal-AI-Lab/Coopanion).** Sign in with ChatGPT on the Start page, select an available model, then choose Test and start. It uses the authorized ChatGPT plan, never automatically falls back to a paid API, and disables upstream telemetry and automatic updates. Reviewed source is backed up in this fork; credentials, app data, builds and local audit reports are excluded. See [personal build operation](docs/PERSONAL.md). The upstream AGPL-3.0-or-later license, attribution and third-party notices are retained. This fork does not publish installers or submit upstream pull requests automatically; the installation instructions below describe upstream releases.
+
+Authorization waits for fifteen minutes. If the browser returns to a refused local connection, start a new sign-in from the app.
+
+Model choices are saved immediately and restored when returning to the Start page. The expanded model menu follows the console's palette; primary buttons use the palette's text colour for their background.
+
+Computer-use changes on the Habits page update the current conversation's tools and instructions while retaining its history and permission settings.
+
+The personal build checks public stable releases every six hours while open. The **Upstream updates** page compares the public upstream baseline with the latest release using the selected ChatGPT subscription model, once per release. Local source, credentials and conversations are excluded from these requests. The pet offers the report, a saved request for manual integration in Codex, or a persistent skip. It never installs an update or switches to paid API credentials. Installation and personal data remain separate from the source checkout.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
@@ -223,7 +237,7 @@ Click the tray icon, or right-click Coo and click the gear. The window opens in 
 <p align="center"><img src="image/README/habits-en.png" alt="Habits" width="720"></p>
 <p align="center"><img src="image/README/dress-en.png" alt="Dress up" width="720"></p>
 
-The expanded sidebar shows the current version at the top left, with a download link below it when a newer release is out. The Windows build and the AppImage download new versions in the background; Coo then asks in its bubble whether to restart and update, or the update installs the next time you quit. If a download stalls, get it from GitHub yourself. On Mac and with the deb, download new versions by hand. After an update, Coo tells you what the new version brings; when you change what it calls you, its dress, walking, computer use or similar settings here, it hears about it and responds.
+The personal build's version link opens **Upstream updates**, where public release checks, a subscription review and local integration requests are available. Checks run while the app is open; automatic download and installation remain disabled. After a manually integrated update, Coo tells you what the version brings. Changes to its name, dress, walking or computer use also reach Coo.
 
 **Advanced mode** at the bottom left shows every page (Worlds, models, extensions, memory, terminal and diagnostics); **Back to normal mode** hides them again. In normal mode, expand the sidebar to show the Advanced mode button.
 

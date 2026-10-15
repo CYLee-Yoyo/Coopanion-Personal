@@ -1,5 +1,16 @@
 /* 桌宠几页(开始、习惯(含电脑操作)、装扮、语音输入)与模式开关。页面标题与内容宽度同「系统提示词」,在 companion.css。只用控制台已有的颜色变量。 */
 .home-note { margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted-foreground); }
+.home-model-picker { position: relative; min-width: 174px; }
+button.home-chatgpt-model { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 40px; padding: 8px 10px; background: var(--surface); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius-md); font: 13px var(--sans); text-align: left; cursor: pointer; }
+button.home-chatgpt-model:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.home-chatgpt-model::after { content: ''; width: 7px; height: 7px; flex: none; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
+button.home-chatgpt-model:disabled { cursor: default; opacity: .5; }
+.home-model-options { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 100%; max-height: min(320px, 50vh); overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: var(--surface); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 8px 24px #0003; }
+.home-model-options[hidden] { display: none; }
+.home-model-option { padding: 7px 10px; border-radius: 5px; white-space: nowrap; cursor: pointer; }
+.home-model-option.active { background: var(--hover); }
+.home-model-option[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 15%, var(--surface)); font-weight: 600; }
+.home-model-option.active[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 24%, var(--surface)); }
 .home-link { font-size: 13px; color: var(--accent); text-decoration: none; }
 .home-link:hover { text-decoration: underline; }
 /* 供应商:两行带标志的按钮。左列是行名,第二行折行后与冒号右边第一个按钮的左端对齐;选中的点亮 */

@@ -1,6 +1,9 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  applying: 'Применение настроек управления компьютером…',
+  applied: 'Настройки управления компьютером применены.',
+  applyFailed: (why: string) => `Настройки сохранены, но не применены: ${why}`,
   title: 'Управление компьютером',
   enabled: 'Разрешить Coo управлять этим компьютером',
   control: 'Разрешить мышь и клавиатуру',

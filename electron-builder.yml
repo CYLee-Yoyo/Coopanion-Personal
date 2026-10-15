@@ -1,7 +1,7 @@
 # Packages build/app (assembled by scripts/pack.ts) into a per-user Windows installer, a
 # macOS disk image and zip for the architecture of the Mac it is built on, or a Linux AppImage and deb.
-appId: ai.pal.coopanion
-productName: Coopanion
+appId: local.coopanion.personal
+productName: Coopanion Personal
 copyright: Copyright © 2026 Pal-AI-Lab
 electronVersion: 44.4.4
 directories:
@@ -15,10 +15,7 @@ files:
   - "**/*"
 # where app/updater.cjs looks for releases; with --publish never this only writes latest.yml and
 # latest-linux.yml next to the installers (and app-update.yml into the app), which the release workflow uploads
-publish:
-  provider: github
-  owner: Pal-AI-Lab
-  repo: Coopanion
+publish: null
 win:
   target:
     - target: nsis
@@ -33,7 +30,7 @@ nsis:
   include: installer/nsis.nsh
   createDesktopShortcut: true
   createStartMenuShortcut: false
-  shortcutName: Coopanion
+  shortcutName: Coopanion Personal
   # the installer's own pages follow the system language among these (NSIS has one Spanish, es_ES);
   # the app's language is the app's own setting
   installerLanguages: [en_US, zh_CN, zh_TW, ja_JP, ko_KR, fr_FR, de_DE, es_ES, pt_BR, it_IT, ru_RU]
@@ -41,7 +38,7 @@ nsis:
   displayLanguageSelector: false
   runAfterFinish: true
   deleteAppDataOnUninstall: false
-  artifactName: Coopanion-Setup-${version}.exe
+  artifactName: Coopanion-Personal-Setup-${version}.exe
 # No Developer ID: the app is signed ad hoc ("-"), which Apple silicon needs to launch it at all;
 # the first open goes through Privacy & Security → Open Anyway (see the README). It lives in the
 # menu bar (LSUIElement), not the Dock; its data is in ~/Library/Application Support/Coopanion.
