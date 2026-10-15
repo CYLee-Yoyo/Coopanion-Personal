@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   lockFpsHint: 'Disegna alla frequenza qui sopra anche da fermo; se disattivato, da fermo scende a 30 fotogrammi al secondo.',
   perchWindowsLabel: "Interazione con le finestre",
   perchWindows: "Stare sopra le finestre",
-  perchWindowsHint: "Trascina il pet sopra una finestra normale con spazio sufficiente o lascialo saltare o arrampicarsi lungo un lato raggiungibile e libero secondo le impostazioni di movimento. Segue la finestra e cade se perde il sostegno. Legge solo i bordi, senza leggere titoli o contenuti, spostare finestre o cambiare il focus.",
+  perchWindowsHint: "Trascina il pet sopra una finestra normale con spazio sufficiente o lascialo saltare sopra, saltare giù da un bordo o arrampicarsi lungo un lato raggiungibile e libero secondo le impostazioni di movimento. Segue la finestra e cade se perde il sostegno. Legge solo i bordi, senza leggere titoli o contenuti, spostare finestre o cambiare il focus.",
   hideFullscreen: 'Nascondi automaticamente',
   hideFullscreenHint: "Si nasconde a schermo intero e ricompare all'uscita. Una finestra ingrandita non conta.",
   soundTitle: 'Suoni',

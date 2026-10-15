@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   lockFpsHint: 'Garde la fréquence ci-dessus aussi au repos ; désactivé, le repos passe à 30 images par seconde.',
   perchWindowsLabel: "Interaction avec les fenêtres",
   perchWindows: "Se poser sur les fenêtres",
-  perchWindowsHint: "Déposez le compagnon sur le haut des fenêtres normales si la place suffit, ou laissez-le y sauter ou grimper le long d’un côté accessible et dégagé pendant ses déplacements. Il suit la fenêtre et tombe si son support disparaît. Seules les limites sont lues, sans lire les titres ou le contenu, déplacer les fenêtres ni changer le focus.",
+  perchWindowsHint: "Déposez le compagnon sur le haut des fenêtres normales si la place suffit, ou laissez-le y sauter, descendre en sautant depuis un bord ou grimper le long d’un côté accessible et dégagé pendant ses déplacements. Il suit la fenêtre et tombe si son support disparaît. Seules les limites sont lues, sans lire les titres ou le contenu, déplacer les fenêtres ni changer le focus.",
   hideFullscreen: 'Masquer automatiquement',
   hideFullscreenHint: 'Se masque pendant le plein écran et réapparaît ensuite. Une fenêtre agrandie ne compte pas.',
   soundTitle: 'Sons',

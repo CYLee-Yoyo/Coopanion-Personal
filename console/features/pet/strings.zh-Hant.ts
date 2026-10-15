@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   lockFpsHint: '靜止時也依上方幀率繪製；關閉時靜止狀態降至每秒 30 幀。',
   perchWindowsLabel: "視窗互動",
   perchWindows: "站在視窗頂端",
-  perchWindowsHint: "可拖到空間足夠的一般視窗頂端，也會依走動設定自行跳上，或沿可觸及且未被遮住的側邊爬上。跟隨視窗位置，支撐消失時落下。只讀取視窗邊界，不讀取標題或畫面，不移動視窗或切換焦點。",
+  perchWindowsHint: "可拖到空間足夠的一般視窗頂端，也會依走動設定跳上、從邊緣躍下，或沿可觸及且未被遮住的側邊爬上。跟隨視窗位置，支撐消失時落下。只讀取視窗邊界，不讀取標題或畫面，不移動視窗或切換焦點。",
   hideFullscreen: '自動隱藏',
   hideFullscreenHint: '全螢幕時隱藏，離開全螢幕後恢復顯示。最大化視窗不算全螢幕。',
   soundTitle: '音效',
