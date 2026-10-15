@@ -93,7 +93,8 @@ const FACE_TONES = {
   smug: 'wink', worried: 'hmm', determined: 'pop', flustered: 'shy', scared: 'surprised', excited: 'sparkle', cry: 'sad', confused: 'hmm',
 };
 /** Body modes in which the figure travels across the stage or squashes fast (dancing steps and sways on the spot). */
-const MOVING_MODES = new Set(['drag', 'air', 'crouch', 'land', 'walk', 'run', 'dance']);
+const CLIMB_MODES = new Set(['climb-walk', 'climb', 'mantle']);
+const MOVING_MODES = new Set(['drag', 'air', 'crouch', 'land', 'walk', 'run', 'dance', ...CLIMB_MODES]);
 /** Points on the body in logo units, for a figure that names none: where the eyes look from, where a tear starts,
  *  where z's and hearts start ([x from, x to, y]), the bubble's spot. `tears` (one start under each eye) has no default. */
 const ANCHORS = { gaze: [140, 117], tear: [166, 136], z: [196, 40], hearts: [90, 175, 34], bubble: [128, 0] };
@@ -105,7 +106,8 @@ const HITS = [[128, 128, 108]];
 /**
  * `els`: { petG, shadowEl, fxG }, SVG elements the body draws into (the shadow is an ellipse).
  * `opts.bounds()` returns { W, H, floorY, S, surfaces? } in stage pixels. Optional surfaces are
- * visible window-top segments { id, x, y, width, originX }; they only catch a falling body.
+ * visible window-top segments { id, x, y, width, originX }; they catch a falling body. Optional
+ * `edges: [{ side: -1 | 1, x, bottom }]` describe unobscured sides connected to that top.
  * `opts.onEvent(kind, detail)` reports what happened to the body: arrived, interrupted, touch, mode, done.
  * `opts.sfx.play(name, kind, ...args)` asks for a sound (web/sound.js names them); an `sfx` without `play`
  * is called by name instead (`sfx.jump()`), for pages that record the calls.
@@ -116,7 +118,8 @@ const HITS = [[128, 128, 108]];
  *   `{ id: { motion: { seconds, face?, sound? } } }` is a gesture the figure draws from `frame.gesture`.
  * `opts.figure` draws the body: `figure.draw(petG, face, frame)` keeps its own elements inside `petG` (logo space,
  * feet at y=256). Its frame adds the face's name, the mode, how long the mode has run, the talk level,
- * drowsiness and how far the body sits.
+ * drowsiness and how far the body sits. `climb: { phase, pull } | null` drives reaching limbs;
+ * `phase` alternates grips during the ascent and `pull` goes from 0 to 1 over the top.
  * `figure.groupTilt(mode, tilt, lean)`, if present, returns the rotation (degrees) the whole group gets
  * instead of tilt + lean; the frame carries tilt, lean and that rotation (groupRot) so the figure can bend the rest.
  * `figure.colors.z`, if present, colours the sleep z's (otherwise they take the `eye` class).
@@ -133,7 +136,7 @@ export function createPet(els, opts) {
   const onEvent = opts.onEvent || (() => {});
   const words = opts.words || {};
   let W = 0, H = 0, floorY = 0, S = .42, T = 0;
-  let surfaces = [], support = null, perchAt = 8;
+  let surfaces = [], support = null, climb = null, perchAt = 8;
   let roam = opts.roam ?? 'free';
   let skin = opts.skin || null;
   let hold = 0; // until T: an order from outside is in progress, free roaming waits
@@ -182,13 +185,28 @@ export function createPet(els, opts) {
         if (pet.mode !== 'drag' && pet.mode !== 'air') setMode('air');
       }
     }
+    if (climb) {
+      const next = surfaces.find(s => s.id === climb.surface.id && s.edges?.some(e => e.side === climb.edge.side));
+      const edge = next?.edges.find(e => e.side === climb.edge.side);
+      const y = next && pet.mode !== 'climb-walk' ? pet.fy + next.y - climb.surface.y : pet.fy;
+      if (!edge || climb.scale !== S || !climbFits(next, edge)
+        || y - 100 * S > edge.bottom) releaseClimb();
+      else {
+        if (pet.mode !== 'climb-walk') {
+          pet.x += edge.x - climb.edge.x;
+          pet.fy += next.y - climb.surface.y;
+        }
+        climb.surface = next; climb.edge = edge;
+        pet.target = climbOutside(edge);
+      }
+    }
     if (!pet.placed && W > 0) {
       pet.x = opts.startX != null ? opts.startX : W * .7; pet.placed = true;
       if (opts.enter === 'drop') { pet.fy = -8; pet.vy = 0; pet.vx = 0; pet.airKind = 'drop'; setMode('air'); }
     }
     pet.x = clamp(pet.x, minX(), maxX());
     pet.target = clamp(pet.target, minX(), maxX());
-    if (pet.mode !== 'air' && pet.mode !== 'drag') pet.fy = support?.y ?? floorY;
+    if (!['air', 'drag', 'climb', 'mantle'].includes(pet.mode)) pet.fy = support?.y ?? floorY;
   }
 
   function toStage(lx, ly) {
@@ -207,7 +225,8 @@ export function createPet(els, opts) {
 
   function setMode(m, o = {}) {
     const prev = pet.mode;
-    if (m === 'air' || m === 'drag') support = null;
+    if (m === 'air' || m === 'drag' || m === 'climb' || m === 'mantle') support = null;
+    if (!CLIMB_MODES.has(m)) climb = null;
     // an arrival clears walkId before going idle, so anything else that ends a walk (a turn, a bow, listening) cuts it short
     if ((prev === 'walk' || prev === 'run') && pet.walkId) {
       onEvent('interrupted', { walkId: pet.walkId, x: Math.round(pet.x), by: m });
@@ -219,7 +238,7 @@ export function createPet(els, opts) {
     Object.assign(pet, o);
     if (prev !== m) onEvent('mode', { mode: m });
   }
-  const busy = () => pet.mode === 'drag' || pet.mode === 'air' || pet.mode === 'crouch';
+  const busy = () => pet.mode === 'drag' || pet.mode === 'air' || pet.mode === 'crouch' || CLIMB_MODES.has(pet.mode);
   function pickTarget(minDist) {
     for (let i = 0; i < 12; i++) {
       const x = rnd(minX(), maxX());
@@ -339,6 +358,7 @@ export function createPet(els, opts) {
     if (pet.expr && T < pet.exprUntil) return pet.expr;
     if (pet.thinking) return 'thinking';
     if (m === 'sit') return 'content';
+    if (m === 'climb' || m === 'mantle') return 'determined';
     if (m === 'run') return 'run';
     return 'neutral';
   }
@@ -346,11 +366,18 @@ export function createPet(els, opts) {
   function decide() {
     const calm = roam === 'calm';
     const plans = T >= perchAt ? perchPlans() : [];
-    const opts2 = [['perch', plans.length ? (calm ? 4 : 12) : 0], ['walk', calm ? 10 : 28], ['run', calm ? 0 : 12], ['look', 14], ['jump', calm ? 2 : 8], ['sit', 16], ['expr', 12], ['wait', calm ? 30 : 10]]
+    const climbs = T >= perchAt ? climbPlans() : [];
+    const opts2 = [['climb', climbs.length ? (calm ? 4 : 10) : 0], ['perch', plans.length ? (calm ? 4 : 12) : 0], ['walk', calm ? 10 : 28], ['run', calm ? 0 : 12], ['look', 14], ['jump', calm ? 2 : 8], ['sit', 16], ['expr', 12], ['wait', calm ? 30 : 10]]
       .filter(o => o[1] > 0 && (o[0] !== pet.lastAct || o[0] === 'wait'));
     let r = Math.random() * opts2.reduce((a, o) => a + o[1], 0), pick = 'wait';
     for (const o of opts2) { if ((r -= o[1]) < 0) { pick = o[0]; break; } }
-    if (pick === 'perch') {
+    if (pick === 'climb') {
+      climb = climbs[Math.floor(Math.random() * climbs.length)];
+      pet.lastAct = 'climb'; pet.expr = null;
+      perchAt = T + (calm ? 45 : 20);
+      setMode('climb-walk', { target: climbOutside(climb.edge) });
+    }
+    else if (pick === 'perch') {
       const plan = plans[Math.floor(Math.random() * plans.length)];
       pet.lastAct = 'perch'; pet.expr = null;
       pet.facing = Math.sign(plan.jumpVx) || pet.facing;
@@ -363,6 +390,25 @@ export function createPet(els, opts) {
     else if (pick === 'sit') { setMode('sit', { dur: rnd(6, 9), willSleep: Math.random() < .6 }); pet.lastAct = 'sit'; }
     else if (pick !== 'wait') act(pick);
     if (pet.mode === 'idle' && T >= pet.nextAt) pet.nextAt = T + rnd(2, 4);
+  }
+
+  const climbOutside = edge => edge.x + edge.side * 48 * S;
+  const climbLanding = edge => edge.x - edge.side * (footMargin() + 18);
+  function climbFits(surface, edge) {
+    const x = climbOutside(edge), landing = climbLanding(edge);
+    return x >= stageMinX() && x <= stageMaxX() && fits(surface, landing)
+      && landing >= stageMinX() && landing <= stageMaxX();
+  }
+  function climbPlans() {
+    return surfaces.filter(s => s.id !== support?.id && s.y < pet.fy - 120 * S).flatMap(surface =>
+      (surface.edges ?? []).filter(edge => climbFits(surface, edge) && pet.fy - 100 * S <= edge.bottom
+        && climbOutside(edge) >= minX() && climbOutside(edge) <= maxX()
+        && Math.abs(climbOutside(edge) - pet.x) <= 600).map(edge => ({ surface, edge, scale: S })));
+  }
+  function releaseClimb() {
+    const approaching = pet.mode === 'climb-walk';
+    pet.vx = pet.vy = 0; pet.airKind = 'drop';
+    setMode(approaching ? 'idle' : 'air'); pet.nextAt = T + 3;
   }
 
   function perchPlans() {
@@ -410,6 +456,7 @@ export function createPet(els, opts) {
     if (!(dt > 0 && dt < Infinity)) return;
     T += dt; pet.modeT += dt;
     A = anchors();
+    if (climb && (roam === 'off' || T <= hold || opts.dialogOpen?.() || pet.listening)) releaseClimb();
     const m = pet.mode, mt = pet.modeT;
     let sqT = 0, strideT = 0, liftT = 0, leanT = 0, sitT = 0, bobT = 0, rate = 0, lookT = [0, 0], tiltT = 0;
     let tk = 160, tc = 12, drowseT = 0;
@@ -440,7 +487,7 @@ export function createPet(els, opts) {
         if (free && !pet.listening && T > pet.nextAt && !(pet.expr && T < pet.exprUntil)) decide();
         break;
       }
-      case 'walk': case 'run': {
+      case 'climb-walk': case 'walk': case 'run': {
         const run = m === 'run', d = pet.target - pet.x, dist = Math.abs(d), dir = Math.sign(d) || pet.facing;
         pet.facing = dir;
         const vMax = run ? 250 : 78;
@@ -463,10 +510,33 @@ export function createPet(els, opts) {
         pet.lastHalf = half;
         if (dist < 1.5) {
           pet.speed = 0;
+          if (m === 'climb-walk') {
+            pet.facing = -climb.edge.side;
+            setMode('climb');
+            break;
+          }
           const id = pet.walkId; pet.walkId = 0;
           setMode('idle'); pet.nextAt = T + rnd(1.2, 3.2);
           if (id) onEvent('arrived', { walkId: id, x: Math.round(pet.x) });
         }
+        break;
+      }
+      case 'climb': {
+        pet.facing = -climb.edge.side;
+        pet.x = climbOutside(climb.edge);
+        pet.phase += Math.PI * 2 * 1.25 * dt;
+        pet.fy = Math.max(climb.surface.y + 135 * S, pet.fy - (72 + 16 * Math.sin(pet.phase)) * dt);
+        lookT = [4, -4]; leanT = 5; bobT = 2;
+        if (pet.fy <= climb.surface.y + 135 * S) setMode('mantle');
+        break;
+      }
+      case 'mantle': {
+        const k = clamp(mt / 1.05, 0, 1);
+        pet.facing = -climb.edge.side;
+        pet.x = lerp(climbOutside(climb.edge), climbLanding(climb.edge), smooth(clamp((k - .2) / .8, 0, 1)));
+        pet.fy = climb.surface.y + 135 * S * (1 - smooth(k)) - 12 * S * Math.sin(Math.PI * k);
+        lookT = [4, -2]; leanT = 12 * Math.sin(Math.PI * k);
+        if (k >= 1) { pet.airKind = 'climb'; land(climb.surface); pet.nextAt = T + 3; }
         break;
       }
       case 'look': {
@@ -632,7 +702,7 @@ export function createPet(els, opts) {
     pet.gap[1] = lerp(pet.gap[1], fc.gap[1], ease(8, dt));
     // turning reads as a quick card flip rather than a mirror snap
     pet.faceVis = lerp(pet.faceVis, pet.facing, ease(15, dt));
-    if (m !== 'walk' && m !== 'run' && m !== 'dance') pet.phase = lerp(pet.phase, Math.round(pet.phase / Math.PI) * Math.PI, ease(6, dt));
+    if (!['walk', 'run', 'dance', 'climb-walk', 'climb'].includes(m)) pet.phase = lerp(pet.phase, Math.round(pet.phase / Math.PI) * Math.PI, ease(6, dt));
     pointer.vx *= Math.exp(-dt * 6);
 
     // secondary motion for ears/antenna/scarf: lags behind horizontal movement
@@ -657,6 +727,10 @@ export function createPet(els, opts) {
       let tx, ty;
       if (m === 'drag') { tx = hx + 7 * Math.sin(T * 11 + i * 2.2); ty = hy + 36; }
       else if (m === 'air') { tx = hx + (i ? 9 : -9); ty = hy + 33; }
+      else if (m === 'climb' || m === 'mantle') {
+        const phase = pet.phase + i * Math.PI;
+        tx = hx + 24 + 8 * Math.sin(phase); ty = hy + 18 - 12 * Math.max(0, Math.cos(phase));
+      }
       else {
         const ph = pet.phase + i * Math.PI;
         const sx = hx + pet.stride * Math.sin(ph), sy = FOOT_Y - pet.lift * Math.max(0, Math.cos(ph));
@@ -731,6 +805,7 @@ export function createPet(els, opts) {
     custom.draw(petG, face, {
       look: pet.look, legs, low: pet.low, t: T, blink, eyeClose, acc: skin, swing: pet.swing,
       face: fname, mode: pet.mode, modeT: pet.modeT, talk: pet.talkK, drowse: pet.drowse, sit: pet.sitK, facing: pet.faceVis, tilt: pet.tilt, lean, groupRot: rot, gesture,
+      climb: pet.mode === 'climb' || pet.mode === 'mantle' ? { phase: pet.phase, pull: pet.mode === 'mantle' ? clamp(pet.modeT / 1.05, 0, 1) : 0 } : null,
     });
 
     const footY = drag ? pet.dy + 220 * S * 1.09 : pet.fy;
@@ -787,7 +862,7 @@ export function createPet(els, opts) {
     press = { x: p.x, y: p.y, t: now(p) };
     pointer.samples = [{ t: now(p), x: p.x, y: p.y }];
     // caught while falling or flying: held at once, since the body would fall on while the pointer moved the drag threshold
-    if (pet.mode === 'air') grab();
+    if (pet.mode === 'air' || pet.mode === 'climb' || pet.mode === 'mantle') grab();
     return true;
   }
   /** Returns the cursor the stage should show. */
@@ -1001,7 +1076,7 @@ export function createBody(host, opts) {
     shift: ctl.shiftDrag,
     /** Puts a body that is standing at stage x, turned to `facing` (1 right, -1 left). */
     place(x, facing) {
-      if (ctl.pet.mode === 'drag' || ctl.pet.mode === 'air') return;
+      if (ctl.pet.mode === 'drag' || ctl.pet.mode === 'air' || CLIMB_MODES.has(ctl.pet.mode)) return;
       const { minX, maxX } = ctl.bounds;
       ctl.pet.x = ctl.pet.target = clamp(x, minX, maxX);
       if (facing === 1 || facing === -1) ctl.pet.facing = ctl.pet.faceVis = facing;

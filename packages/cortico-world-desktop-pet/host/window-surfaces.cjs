@@ -1,7 +1,7 @@
 /** Read-only window geometry for the pet's one-way platforms. No window text or input is requested. */
 const { randomUUID } = require('node:crypto');
 
-/** Visible top-edge segments, in page DIPs; windows arrive from front to back. */
+/** Visible top segments and continuous side edges, in page DIPs; windows arrive from front to back. */
 function projectWindowSurfaces(windows, area) {
   const surfaces = [], blockers = [];
   for (const window of windows) {
@@ -16,7 +16,18 @@ function projectWindowSurfaces(windows, area) {
         spans = spans.flatMap(([a, z]) => x1 <= a || x0 >= z ? [[a, z]]
           : [[a, Math.min(z, x0)], [Math.max(a, x1), z]].filter(([a, z]) => z - a >= 24));
       }
-      for (const [x, end] of spans) if (end - x >= 24) surfaces.push({ id: window.id, x, y, width: end - x, originX: r.x - area.x });
+      const edges = [-1, 1].flatMap(side => {
+        const x = r.x + (side === 1 ? r.width : 0);
+        if (x <= area.x || x >= area.x + area.width) return [];
+        let bottom = Math.min(r.y + r.height, area.y + area.height);
+        for (const b of blockers) {
+          if (x < b.x - 2 || x > b.x + b.width + 2 || b.y + b.height < r.y - 1) continue;
+          bottom = Math.min(bottom, b.y - 2);
+        }
+        return bottom - r.y >= 24 ? [{ side, x: x - area.x, bottom: bottom - area.y }] : [];
+      });
+      for (const [x, end] of spans) if (end - x >= 24) surfaces.push({ id: window.id, x, y, width: end - x, originX: r.x - area.x,
+        edges: edges.filter(e => Math.abs((e.side === -1 ? x : end) - (e.x - e.side * 8)) < .5) });
     }
     blockers.push(r);
   }

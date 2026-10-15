@@ -80,7 +80,10 @@ host?.onFloor?.((px) => { below = px; body?.set({ bounds: bounds() }); });
 host?.onWindowSurfaces?.((surfaces) => {
   if (!Array.isArray(surfaces) || surfaces.length > 1024) return;
   windowSurfaces = surfaces.filter(s => s && typeof s.id === 'string' && s.id.length <= 64
-    && [s.x, s.y, s.width, s.originX].every(v => typeof v === 'number' && Number.isFinite(v)) && s.width > 0);
+    && [s.x, s.y, s.width, s.originX].every(v => typeof v === 'number' && Number.isFinite(v)) && s.width > 0)
+    .map(s => ({ ...s, edges: Array.isArray(s.edges) && s.edges.length <= 2 ? s.edges.filter(e => e
+      && (e.side === -1 || e.side === 1) && [e.x, e.bottom].every(v => typeof v === 'number' && Number.isFinite(v))
+      && e.bottom > s.y) : [] }));
   body?.set({ bounds: bounds() });
 });
 addEventListener('resize', () => {

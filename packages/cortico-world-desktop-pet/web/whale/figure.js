@@ -460,7 +460,8 @@ export async function createWhaleFigure(base = new URL('./', import.meta.url), o
   // moves her head instead. Only flight, dragging and the jump's crouch and landing tip the whole group,
   // running keeps half its lean. The shares ease between modes so the group never snaps.
   // dancing sways her mostly as a whole, the rest of the sway goes to the neck
-  const GROUP = { air: [1, 1], drag: [1, 1], crouch: [1, 1], land: [1, 1], walk: [1, .5], run: [1, .5], dance: [.6, 0] };
+  const GROUP = { air: [1, 1], drag: [1, 1], crouch: [1, 1], land: [1, 1], walk: [1, .5], 'climb-walk': [1, .5],
+    climb: [.5, .3], mantle: [.5, .5], run: [1, .5], dance: [.6, 0] };
   // the ninja run leans her whole body forward from the soles, in a straight line: bent at the waist instead,
   // the bodice comes away from the skirt and its bow and the tops of the legs show at the waist
   let wTilt = 0, wLean = 0, facing = 1;
@@ -526,7 +527,7 @@ export async function createWhaleFigure(base = new URL('./', import.meta.url), o
     lastT = t;
     const mode = o.mode || 'idle', face = o.face || 'neutral';
     facing = Math.sign(o.facing || 1);
-    const walking = mode === 'walk' || mode === 'run', held = mode === 'drag', airborne = mode === 'air';
+    const walking = mode === 'walk' || mode === 'run' || mode === 'climb-walk', held = mode === 'drag', airborne = mode === 'air';
 
     /* body: the kit's `low` is how far the hips sink (sitting, the walk's bob), in these units */
     sitK = lerp(sitK, clamp(o.sit ?? 0, 0, 1), ease(12, dt));
@@ -607,6 +608,11 @@ export async function createWhaleFigure(base = new URL('./', import.meta.url), o
     if (runK > .001) { aN = lerp(aN, 38, runK); aF = lerp(aF, 32, runK); }
     if (wave) aN = lerp(aN, 108, wave);
     if (shiver) { aN = lerp(aN, -10, shiver); aF = lerp(aF, 8, shiver); }
+    if (o.climb) {
+      const reach = Math.sin(o.climb.phase) * (1 - o.climb.pull);
+      aN = -100 + reach * 22 + o.climb.pull * 75;
+      aF = -85 - reach * 22 + o.climb.pull * 60;
+    }
     const armN = sp.armN.step(aN, dt) + wave * 13 * Math.sin(t * 15) + shiver * 1.4 * Math.sin(t * 47) + flap * 9 * Math.sin(t * 24);
     const armF = sp.armF.step(aF, dt) - shiver * 1.2 * Math.sin(t * 43 + 1) - flap * 9 * Math.sin(t * 24 + 1);
 
@@ -626,7 +632,7 @@ export async function createWhaleFigure(base = new URL('./', import.meta.url), o
     st.alpha.skirt = st.alpha.waist_bow_front = 1 - sitIn;
     st.alpha.leg_back = st.alpha.leg_front = 1 - smooth(.42, .52, sitK);
     st.alpha.skirt_sit = st.alpha.waist_bow_sit_front = sitIn;
-    st.armNear = { a: armN };
+    st.armNear = { a: armN, tx: o.climb ? 12 * (1 - o.climb.pull) : 0 };
     st.armFar = { a: armF };
     // the far arm's cuff layer sits over the bodice; swept back, the arm is behind her and so is the cuff
     st.alpha.arm_far_end_front = 1 - smooth(12, 30, armF);
