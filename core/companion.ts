@@ -542,6 +542,7 @@ export async function main(): Promise<void> {
         } finally { track.close(); }
       } } };
     },
+    subscriptionFailure: () => CHATGPT.failureReason(),
     paused: () => bot.core.bus.isPaused(),
     canNotify: () => reviewIdle && !guiding && !bot.core.bus.isPaused() && pet?.petState().connected === true && pet.petState().onDesktop === true,
     notify: report => {

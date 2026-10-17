@@ -2,11 +2,12 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Language } from 'cortico/core/language.ts';
+import { ChatGPTError } from 'cortico-provider-coo/src/chatgpt/client.ts';
 import { PERSONAL_FEATURES, UPSTREAM_BASE, type PersonalFeatureId } from './personal-upstream.ts';
 import { isNewerUpstream, PublicUpstreamSource } from './upstream-source.ts';
-import { parseReview, reviewUpstream, type SubscriptionReviewBinding } from './upstream-review.ts';
+import { parseReview, reviewUpstream, UpstreamReviewError, type SubscriptionReviewBinding } from './upstream-review.ts';
 import { upstreamText } from './upstream-strings.ts';
-import type { UpstreamDecision, UpstreamReport, UpstreamState } from './upstream-types.ts';
+import { UPSTREAM_FAILURES, type UpstreamDecision, type UpstreamFailure, type UpstreamReport, type UpstreamState } from './upstream-types.ts';
 
 export const CHECK_EVERY_MS = 6 * 60 * 60_000;
 type PetChoice = 'view' | 'update' | 'skip' | 'closed' | 'unavailable';
@@ -15,6 +16,7 @@ export interface UpstreamWatchOptions {
   installedVersion: string;
   language: () => Language;
   subscription: () => SubscriptionReviewBinding | null;
+  subscriptionFailure?: () => UpstreamFailure | null;
   paused: () => boolean;
   canNotify: () => boolean;
   notify: (report: UpstreamReport) => { answer: Promise<PetChoice>; close(): void };
@@ -46,7 +48,7 @@ export class UpstreamWatch {
   private defaults(): UpstreamState {
     return { schema: 1, enabled: true, intervalHours: 6, baseline: UPSTREAM_BASE.version, installedVersion: this.options.installedVersion,
       phase: 'idle', lastAttemptAt: null, lastCheckedAt: null, nextCheckAt: null, latest: null, report: null, decision: null,
-      attempts: [], notified: [], error: null, requestSaved: false };
+      attempts: [], notified: [], error: null, failure: null, requestSaved: false };
   }
 
   private load(): UpstreamState {
@@ -73,8 +75,9 @@ export class UpstreamWatch {
         || !Array.isArray(saved.decision.keep) || saved.decision.keep.some(id => !PERSONAL_FEATURES.some(f => f.id === id))
         || typeof saved.decision.note !== 'string' || saved.decision.note.length > 4000)) throw new Error('Invalid release state');
       return { ...saved, installedVersion: fresh.installedVersion, intervalHours: 6,
+        failure: saved.failure == null ? null : UPSTREAM_FAILURES.includes(saved.failure) ? saved.failure : 'unknown',
         phase: saved.phase === 'analyzing' ? 'interrupted' : saved.phase === 'checking' ? 'idle' : saved.phase };
-    } catch { return { ...fresh, enabled: false, phase: 'failed', error: 'storage' }; }
+    } catch { return { ...fresh, enabled: false, phase: 'failed', error: 'storage', failure: 'storage' }; }
   }
 
   snapshot(): UpstreamState { return structuredClone(this.state); }
@@ -102,7 +105,7 @@ export class UpstreamWatch {
     this.dialog?.close();
     if (this.state.phase === 'analyzing' || this.state.phase === 'checking') {
       try { this.save({ phase: this.state.phase === 'analyzing' ? 'interrupted' : 'idle' }); }
-      catch { this.state.error = 'storage'; }
+      catch { this.state.error = 'storage'; this.state.failure = 'storage'; }
     }
     await this.flight;
   }
@@ -136,41 +139,53 @@ export class UpstreamWatch {
   }
 
   private async run(manual: boolean, retry: boolean, signal: AbortSignal): Promise<UpstreamState> {
-    let stage: 'network' | 'analysis' = 'network';
-    const previousFailure = this.state.error === 'analysis' || this.state.error === 'subscription';
+    let stage: 'network' | 'analysis' | 'storage' = 'network';
+    const previous = { error: this.state.error, failure: this.state.failure };
     try {
-      this.save({ phase: 'checking', error: null, lastAttemptAt: this.now(), nextCheckAt: this.now() + CHECK_EVERY_MS });
+      this.save({ phase: 'checking', lastAttemptAt: this.now(), nextCheckAt: this.now() + CHECK_EVERY_MS });
       const latest = await this.source.latest(signal);
       signal.throwIfAborted();
       const key = keyOf(latest.version);
       const same = this.state.latest?.version === latest.version;
-      this.save({ latest, lastCheckedAt: this.now(), ...(same ? {} : { report: null, decision: null, requestSaved: false }) });
-      if (!isNewerUpstream(latest.version, UPSTREAM_BASE.version)) { this.save({ phase: 'current' }); return this.snapshot(); }
-      if (this.state.report?.key === key) { this.save({ phase: 'ready' }); return this.snapshot(); }
-      if (this.state.attempts.includes(key) && !retry) { this.save({ phase: previousFailure ? 'failed' : 'interrupted', error: previousFailure ? 'analysis' : null }); return this.snapshot(); }
+      this.save({ latest, lastCheckedAt: this.now(), ...(same ? {} : { report: null, decision: null, requestSaved: false, error: null, failure: null }) });
+      if (!isNewerUpstream(latest.version, UPSTREAM_BASE.version)) { this.save({ phase: 'current', error: null, failure: null }); return this.snapshot(); }
+      if (this.state.report?.key === key) { this.save({ phase: 'ready', error: null, failure: null }); return this.snapshot(); }
+      if (this.state.attempts.includes(key) && !retry) {
+        const failed = same && previous.error !== null;
+        this.save({ phase: failed ? 'failed' : 'interrupted', error: failed ? previous.error : null, failure: failed ? previous.failure : null });
+        return this.snapshot();
+      }
       const binding = this.options.subscription();
-      if (!binding || (!manual && this.options.paused())) { this.save({ phase: 'waiting-subscription', error: 'subscription' }); return this.snapshot(); }
+      if (!binding || (!manual && this.options.paused())) { this.waitForSubscription(); return this.snapshot(); }
       const diff = await this.source.diff(latest, signal);
       signal.throwIfAborted();
       // Authorization can be revoked while public changes are loading.
-      if (!this.options.subscription() || (!manual && this.options.paused())) { this.save({ phase: 'waiting-subscription', error: 'subscription' }); return this.snapshot(); }
+      if (!this.options.subscription() || (!manual && this.options.paused())) { this.waitForSubscription(); return this.snapshot(); }
       stage = 'analysis';
-      this.save({ phase: 'analyzing', error: null, attempts: [...new Set([...this.state.attempts, key])] });
+      this.save({ phase: 'analyzing', error: null, failure: null, attempts: [...new Set([...this.state.attempts, key])] });
       const analysis = await reviewUpstream(binding, latest, diff, this.options.language(), signal);
       signal.throwIfAborted();
       const report: UpstreamReport = { key, release: latest, baseline: UPSTREAM_BASE.version, head: diff.head, compareUrl: diff.compareUrl,
         changedFiles: diff.files.map(({ patch: _patch, ...file }) => file), overlaps: diff.overlaps, limitations: diff.limitations,
         analysis, model: binding.model, analyzedAt: this.now() };
+      stage = 'storage';
       mkdirSync(join(this.options.dir, 'reports'), { recursive: true });
       atomic(this.artifact('reports', latest.version, 'json'), `${JSON.stringify(report, null, 2)}\n`);
-      this.save({ report, phase: 'ready', error: null });
-    } catch {
+      this.save({ report, phase: 'ready', error: null, failure: null });
+    } catch (error) {
       if (!signal.aborted) {
-        try { this.save({ phase: 'failed', error: stage }); }
-        catch { this.state.phase = 'failed'; this.state.error = 'storage'; this.state.enabled = false; }
+        const failure = error instanceof ChatGPTError ? error.reason : error instanceof UpstreamReviewError ? 'review-format'
+          : error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : stage === 'analysis' ? 'unknown' : stage;
+        try { this.save({ phase: 'failed', error: stage, failure }); }
+        catch { this.state.phase = 'failed'; this.state.error = 'storage'; this.state.failure = 'storage'; this.state.enabled = false; }
       }
     }
     return this.snapshot();
+  }
+
+  private waitForSubscription(): void {
+    this.save({ phase: 'waiting-subscription', error: 'subscription',
+      failure: this.options.subscriptionFailure?.() ?? (this.options.subscription() === null ? 'subscription' : 'paused') });
   }
 
   private artifact(kind: 'reports' | 'requests', version: string, extension: 'json' | 'md'): string {

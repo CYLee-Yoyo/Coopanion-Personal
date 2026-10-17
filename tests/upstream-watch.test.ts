@@ -13,7 +13,7 @@ import { PUBLIC_API, PublicUpstreamSource, isNewerUpstream } from '../core/upstr
 import { parseReview, reviewInput, reviewUpstream, upstreamSubscription } from '../core/upstream-review.ts';
 import { CHECK_EVERY_MS, UpstreamWatch, type UpstreamWatchOptions } from '../core/upstream-watch.ts';
 import { upstreamText } from '../core/upstream-strings.ts';
-import type { UpstreamAnalysis, UpstreamDiff, UpstreamRelease } from '../core/upstream-types.ts';
+import { UPSTREAM_FAILURES, type UpstreamAnalysis, type UpstreamDiff, type UpstreamRelease } from '../core/upstream-types.ts';
 
 const HEAD = '1'.repeat(40);
 const SUBHEAD = '2'.repeat(40);
@@ -201,9 +201,12 @@ describe('subscription review and local lifecycle', () => {
     let available = false; let paused = false;
     const f = fixture({ subscription: () => available ? { client: f.client, model: 'fixture-model' } : null, paused: () => paused });
     f.watch.start(); await f.watch.check();
-    expect(f.watch.snapshot().phase).toBe('waiting-subscription'); expect(f.sent).toHaveLength(0);
+    expect(f.watch.snapshot()).toMatchObject({ phase: 'waiting-subscription', failure: 'subscription' }); expect(f.sent).toHaveLength(0);
+    paused = true;
+    await f.watch.check(); expect(f.watch.snapshot().failure).toBe('subscription');
     available = true; paused = true;
     await f.watch.check(); expect(f.sent).toHaveLength(0);
+    expect(f.watch.snapshot().failure).toBe('paused');
     await f.watch.check(true); expect(f.sent).toHaveLength(1);
   });
 
@@ -227,13 +230,15 @@ describe('subscription review and local lifecycle', () => {
     let calls = 0;
     const f = fixture({}, (async () => { calls++; return sse(calls === 1 ? 'invalid JSON' : JSON.stringify(analysis)); }) as typeof fetch);
     f.watch.start(); await f.watch.check();
-    expect(f.watch.snapshot()).toMatchObject({ phase: 'failed', error: 'analysis' });
+    expect(f.watch.snapshot()).toMatchObject({ phase: 'failed', error: 'analysis', failure: 'review-format' });
     await f.watch.check(true); expect(calls).toBe(1);
+    expect(f.watch.snapshot().failure).toBe('review-format');
     await f.watch.stop();
     const resumed = fixture({ dir: f.dir });
     resumed.watch.start(); await resumed.watch.check(true); expect(resumed.sent).toHaveLength(0);
+    expect(resumed.watch.snapshot().failure).toBe('review-format');
     await resumed.watch.check(true, true); expect(resumed.sent).toHaveLength(1);
-    expect(resumed.watch.snapshot().phase).toBe('ready');
+    expect(resumed.watch.snapshot()).toMatchObject({ phase: 'ready', error: null, failure: null });
   });
 
   it('stops on quota errors without a paid fallback or an automatic analysis retry', async () => {
@@ -241,6 +246,67 @@ describe('subscription review and local lifecycle', () => {
     const f = fixture({}, (async () => { calls++; return new Response(JSON.stringify({ error: { code: 'subscription_sharing_usage_limit_exceeded' } }), { status: 429 }); }) as typeof fetch);
     f.watch.start(); await f.watch.check(); await f.watch.check(true);
     expect(calls).toBe(1); expect(f.watch.snapshot().report).toBeNull();
+    expect(f.watch.snapshot().failure).toBe('usage-limit');
+  });
+
+  it.each([
+    ['subscription_sharing_usage_limit_exceeded', 'usage-limit'],
+    ['subscription_sharing_invalid_user', 'authorization'],
+    ['chatpass_v2_scope_not_authorized', 'permission'],
+    ['subscription_sharing_usage_unavailable', 'unavailable'],
+    ['subscription_sharing_unsupported_capability', 'unsupported'],
+  ])('retains %s through scheduled checks and restart without private text or new inference', async (code, failure) => {
+    let calls = 0; let now = 1;
+    const f = fixture({ now: () => now }, (async () => {
+      calls++;
+      return new Response(`data: ${JSON.stringify({ type: 'response.failed', response: { error: { code, message: 'PRIVATE-CREDENTIAL-TEXT' } } })}\n\n`,
+        { headers: { 'Content-Type': 'text/event-stream' } });
+    }) as typeof fetch);
+    f.watch.start(); await f.watch.check();
+    expect(f.watch.snapshot()).toMatchObject({ phase: 'failed', error: 'analysis', failure });
+    now += CHECK_EVERY_MS;
+    await f.watch.check();
+    expect(f.watch.snapshot().failure).toBe(failure); expect(calls).toBe(1);
+    expect(readFileSync(join(f.dir, 'state.json'), 'utf8')).not.toContain('PRIVATE');
+    await f.watch.stop();
+    const resumed = fixture({ dir: f.dir, now: () => now });
+    resumed.watch.start(); await resumed.watch.check(true);
+    expect(resumed.watch.snapshot().failure).toBe(failure); expect(resumed.sent).toHaveLength(0);
+  });
+
+  it('loads older failed records without inventing a reason or repeating inference', async () => {
+    const f = fixture({}, (async () => sse('invalid JSON')) as typeof fetch);
+    f.watch.start(); await f.watch.check(); await f.watch.stop();
+    const saved: Record<string, unknown> = f.watch.snapshot() as unknown as Record<string, unknown>;
+    delete saved.failure;
+    writeFileSync(join(f.dir, 'state.json'), JSON.stringify(saved));
+    const resumed = fixture({ dir: f.dir });
+    resumed.watch.start(); await resumed.watch.check(true);
+    expect(resumed.watch.snapshot()).toMatchObject({ phase: 'failed', failure: null });
+    expect(resumed.sent).toHaveLength(0);
+  });
+
+  it('replaces unrecognized stored reasons with a fixed category', async () => {
+    const f = fixture(); f.watch.start(); await f.watch.check(); await f.watch.stop();
+    writeFileSync(join(f.dir, 'state.json'), JSON.stringify({ ...f.watch.snapshot(), failure: 'PRIVATE-CREDENTIAL-TEXT' }));
+    const resumed = fixture({ dir: f.dir });
+    expect(resumed.watch.snapshot().failure).toBe('unknown');
+    expect(JSON.stringify(resumed.watch.snapshot())).not.toContain('PRIVATE');
+  });
+
+  it('shows a known subscription block before inference without starting an attempt', async () => {
+    const f = fixture({ subscription: () => null, subscriptionFailure: () => 'permission' });
+    f.watch.start(); await f.watch.check();
+    expect(f.watch.snapshot()).toMatchObject({ phase: 'waiting-subscription', failure: 'permission', attempts: [] });
+    expect(f.sent).toHaveLength(0);
+  });
+
+  it.each(['network', 'timeout'] as const)('records a public-source %s failure without exposing its message', async failure => {
+    const f = fixture({ source: { latest: async () => { throw failure === 'timeout' ? new DOMException('PRIVATE-TEXT', 'TimeoutError') : new Error('PRIVATE-TEXT'); },
+      diff: async () => structuredClone(diff) } });
+    f.watch.start(); await f.watch.check();
+    expect(f.watch.snapshot()).toMatchObject({ phase: 'failed', failure, attempts: [] });
+    expect(JSON.stringify(f.watch.snapshot())).not.toContain('PRIVATE');
   });
 
   it('persists a skip decision and never nags the same release after restart', async () => {
@@ -339,6 +405,8 @@ describe('review boundaries and translations', () => {
       expect(Object.keys(s.phases)).toHaveLength(8);
       expect(Object.keys(s.featureNames)).toHaveLength(PERSONAL_FEATURES.length);
       expect(Object.values(s.phases).every(Boolean)).toBe(true);
+      expect(Object.keys(s.failures)).toEqual([...UPSTREAM_FAILURES]);
+      expect(Object.values(s.failures).every(value => typeof value === 'string' && value.trim())).toBe(true);
     }
   });
 });

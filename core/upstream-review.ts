@@ -11,6 +11,7 @@ import type { UpstreamAnalysis, UpstreamDiff, UpstreamRelease } from './upstream
 
 const INPUT_BUDGET = 72_000;
 export interface SubscriptionReviewBinding { client: ResponseClient; model: string }
+export class UpstreamReviewError extends Error {}
 
 export function upstreamSubscription(config: Pick<CoreConfig, 'providers'>, session: ChatGPTSession, module: ProviderModule,
   registry: Pick<ProviderRegistry, 'bind'>, language: Language): SubscriptionReviewBinding | null {
@@ -60,8 +61,9 @@ export async function reviewUpstream(binding: SubscriptionReviewBinding, release
     input: [{ type: 'message', role: 'user', content: reviewInput(release, diff) }], tools: [], reasoning: { effort: 'low' } },
   { signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]), role: 'upstream-review' });
   signal.throwIfAborted();
-  if (generation.response.status !== 'completed' || generation.response.output.some(item => item.type !== 'message' && item.type !== 'reasoning')) throw new Error('Incomplete upstream review');
+  if (generation.response.status !== 'completed' || generation.response.output.some(item => item.type !== 'message' && item.type !== 'reasoning')) throw new UpstreamReviewError('Incomplete upstream review');
   const text = generation.response.output.flatMap(item => item.type === 'message' && item.role === 'assistant'
     ? item.content.flatMap(part => part.type === 'output_text' ? [part.text] : []) : []).join('\n');
-  return parseReview(text);
+  try { return parseReview(text); }
+  catch { throw new UpstreamReviewError('Invalid upstream review'); }
 }
