@@ -1,4 +1,4 @@
-# app/chatgpt-auth.cjs、core/upstream-watch.ts、core/personal-upstream.ts、core/upstream-strings.ts、console/features/updates/、console/features/pet/、scripts/check-personal-push.mjs 與 packages/cortico-provider-coo/src/chatgpt/：專屬版
+# app/chatgpt-auth.cjs、app/personal-data.cjs、core/upstream-watch.ts、core/personal-upstream.ts、core/upstream-strings.ts、console/features/updates/、console/features/pet/、scripts/check-personal-push.mjs 與 packages/cortico-provider-coo/src/chatgpt/：專屬版
 
 Coopanion Personal 使用獨立的安裝識別 `local.coopanion.personal`。Windows 安裝位置為 `%LOCALAPPDATA%\Programs\CoopanionPersonal`，資料位置為 `%LOCALAPPDATA%\CoopanionPersonal`，控制台使用本機連接埠 17888。原版 Coopanion 的資料不會被匯入。
 
@@ -7,6 +7,8 @@ Coopanion Personal 使用獨立的安裝識別 `local.coopanion.personal`。Wind
 Core 支援系統代理與 PAC，手動設定的代理環境變數優先。啟動紀錄僅顯示代理來源、協定及固定錯誤分類，不記錄代理帳密、位址或 PAC 錯誤原文。HTTPS 驗證與訂閱請求拒絕重新導向的規則保持生效。
 
 開發倉庫、已安裝程式與個人資料分開保存。GitHub fork 僅備份經審核的原始碼。
+
+Windows 安裝目錄的 `personal-data-location.json` 保存實體資料目錄的絕對路徑，避免不同啟動來源讀取到不同的 AppData 副本。首次啟動會記錄實際路徑；指定的目錄不存在時停止啟動，避免建立另一份空白設定。搬移資料時應先結束程式，複製完整資料並核對內容，再修改此本機檔案。`CORTICO_COMPANION_DATA` 優先於此記錄，供隔離開發使用。路徑記錄與資料目錄均不納入 Git。
 
 開始頁、使用導覽及進階模式的 ChatGPT 登入都共用 Electron 主程式的登入服務，端點識別保留為 `chatgpt-plan`。導覽沿用已儲存且仍可用的模型。帳號憑證不會寫入端點 `.env`，設定頁不接收授權 URL 或 token。
 

@@ -13,12 +13,11 @@
  * (the default) updates itself from the GitHub releases; `steam` is installed and updated by Steam, does
  * not run the updater, and reads figure packs from the Steam Workshop (`steam.cjs`).
  *
- * Every file the app writes lives under one data directory: on Windows `<install dir>\data` when
- * packaged (the uninstaller leaves it, and nothing goes to AppData), except the Steam build, whose
- * install directory Steam deletes on uninstall: `%APPDATA%\Coopanion`; on macOS
- * `~/Library/Application Support/Coopanion`, since the .app is not a place to write; on Linux
- * `~/.config/Coopanion` (an AppImage is mounted read-only, a deb installs under /opt); from
- * source `build/data`; or `CORTICO_COMPANION_DATA`. It holds `home/` (deployment, endpoint,
+ * Personal data defaults to `%LOCALAPPDATA%\CoopanionPersonal` on Windows and
+ * `<appData>/CoopanionPersonal` elsewhere, or `build/data` from source. A packaged Windows install
+ * pins the physical directory in `personal-data-location.json` beside the executable so launches
+ * from a packaged parent and Explorer share it. `CORTICO_COMPANION_DATA` overrides this selection.
+ * The data directory holds `home/` (deployment, endpoint,
  * Memory), `extensions/` (Worlds and providers installed from npm), `logs/`, `tmp/` (the process
  * temp directory), `pnpm/` (store and caches for extension installs), and the Chromium profiles.
  *
@@ -51,9 +50,12 @@ const ICONS = join(__dirname, 'icons');
 /** The build's channel and, for `steam`, its Steam app id (see the module header). */
 const BUILD = JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8')).coopanion ?? {};
 const STEAM = BUILD.channel === 'steam';
+const DEFAULT_DATA = !app.isPackaged ? join(APP_ROOT, 'build', 'data')
+  : join(process.platform === 'win32' ? process.env.LOCALAPPDATA || app.getPath('appData') : app.getPath('appData'), 'CoopanionPersonal');
 const DATA = process.env.CORTICO_COMPANION_DATA
-  || (!app.isPackaged ? join(APP_ROOT, 'build', 'data')
-    : join(process.platform === 'win32' ? process.env.LOCALAPPDATA || app.getPath('appData') : app.getPath('appData'), 'CoopanionPersonal'));
+  || (app.isPackaged && process.platform === 'win32'
+    ? require('./personal-data.cjs').pinnedDataDirectory(DEFAULT_DATA, join(dirname(process.execPath), 'personal-data-location.json'))
+    : DEFAULT_DATA);
 
 /**
  * An install made through the installer's pages sits in %LOCALAPPDATA%\Programs\Coopanion: the "only for me"
