@@ -64,6 +64,8 @@ Coo Pet Provider:[Cortico](https://github.com/Pal-AI-Lab/Cortico) 的一个 prov
 
 `client.ts` 固定使用官方 Responses 與 models 端點，拒絕重新導向，傳送 `stream: true`、`store: false`，工具使用 `coo` namespace。訂閱額度或授權限制會暫停投遞，確認恢復後須手動測試並重新開始；不會切換付費 API。
 
+串流的 `response.metadata` 是傳輸資訊，不加入模型輸出或紀錄，也不視為完成回覆。其他事件仍經過協定驗證，必須收到 `response.completed`；中斷、未完成及額度錯誤仍會停止請求。
+
 控制台頁 `llm:chatgpt-plan` 的 `auth` 面板提供 `state`、`models`、`select`、`signin`、`cancel`、`signout`、`usage`。`connectChatGPT` 讓新版導覽共用這套登入服務，沿用已儲存的可用模型，再測試與啟動。設定頁不取得 token 或授權 URL。詳細契約見 [專屬版操作說明](../../docs/PERSONAL.md)。
 
 端点配置示例(`<CORTICO_HOME>/providers/qwen/config.json`,密钥在同目录 `.env` 的 `QWEN_API_KEY`):

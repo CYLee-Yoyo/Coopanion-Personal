@@ -169,6 +169,8 @@ export class ChatGPTClient extends BaseProvider {
             if (payload === '[DONE]') break read;
             let raw: Record<string, any>;
             try { raw = JSON.parse(payload); } catch { throw new Error('ChatGPT 串流格式不符，未記錄回應原文。'); }
+            // Transport metadata does not contribute output or complete an inference.
+            if (raw.type === 'response.metadata') continue;
             if (raw.type === 'response.failed' || raw.type === 'error') {
               const code = errorCode(raw.response ?? raw, 'response_failed');
               if (BLOCKED.has(code)) this.onBlocked(subscriptionMessage(code));

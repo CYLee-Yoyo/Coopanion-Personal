@@ -64,6 +64,30 @@ describe('ChatGPT subscription transport', () => {
     await expect(client.respond(request)).rejects.toThrow('terminal_outputs');
   });
 
+  it('ignores transport metadata while preserving output through completed inference', async () => {
+    const item = { type: 'message', id: 'message-test', role: 'assistant', status: 'completed', content: [] };
+    const received: string[] = [];
+    const client = new ChatGPTClient(session, undefined, () => {}, (async () => eventStream([
+      { type: 'response.metadata', metadata: { note: 'fixture-private-metadata' } }, events[0],
+      { type: 'response.output_item.added', sequence_number: 1, output_index: 0, item },
+      { type: 'response.output_item.done', sequence_number: 2, output_index: 0, item },
+      { type: 'response.metadata', sequence_number: 3, headers: { 'fixture-header': 'fixture-private-header' } },
+      { ...events[1], sequence_number: 4, response: { ...completed, output: [item] } },
+    ])) as typeof fetch);
+    const result = await client.respond(request, { onEvent: event => received.push(event.type) });
+    expect(result.response.output).toEqual([item]);
+    expect(received).not.toContain('response.metadata');
+    expect(result.attempts[0].outcome).toBe('completed');
+    expect(JSON.stringify(result)).not.toContain('fixture-private');
+  });
+
+  it('requires a terminal response even when metadata contains a completed-looking resource', async () => {
+    const client = new ChatGPTClient(session, undefined, () => {}, (async () => eventStream([
+      events[0], { type: 'response.metadata', response: completed },
+    ])) as typeof fetch);
+    await expect(client.respond(request)).rejects.toThrow('未收到完整回覆');
+  });
+
   it('rejects repeated wire sequence numbers before normalizing the stream', async () => {
     const client = new ChatGPTClient(session, undefined, () => {}, (async () => eventStream([
       events[0], { ...events[1], sequence_number: 0 },
@@ -93,7 +117,7 @@ describe('ChatGPT subscription transport', () => {
   it('stops on a late subscription limit error without retrying or switching credentials', async () => {
     let requests = 0; let reason = '';
     const client = new ChatGPTClient(session, undefined, value => { reason = value; }, (async () => {
-      requests++; return eventStream([events[0], { type: 'response.failed', sequence_number: 1,
+      requests++; return eventStream([events[0], { type: 'response.metadata', sequence_number: 1 }, { type: 'response.failed', sequence_number: 2,
         response: { ...completed, status: 'failed', error: { code: 'subscription_sharing_usage_limit_exceeded' } } }]);
     }) as typeof fetch);
     await expect(client.respond(request)).rejects.toThrow('上限'); expect(requests).toBe(1); expect(reason).toContain('停止請求');
