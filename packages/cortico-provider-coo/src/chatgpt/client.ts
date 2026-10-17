@@ -12,6 +12,19 @@ import { CHATGPT_BASE_URL } from './types.ts';
 import { sinceLastDelivery } from '../context.ts';
 
 const NAMESPACE = 'coo';
+export type ChatGPTFailure = 'usage-limit' | 'authorization' | 'permission' | 'ineligible' | 'unavailable' | 'unsupported' | 'network' | 'timeout' | 'response' | 'unknown';
+export class ChatGPTError extends GenerationError {
+  constructor(readonly reason: ChatGPTFailure, ...args: ConstructorParameters<typeof GenerationError>) { super(...args); }
+}
+function failureReason(code: string, status: number): ChatGPTFailure {
+  if (code === 'subscription_sharing_usage_limit_exceeded') return 'usage-limit';
+  if (code === 'subscription_sharing_invalid_user' || status === 401) return 'authorization';
+  if (code === 'subscription_sharing_user_not_eligible') return 'ineligible';
+  if (code === 'subscription_sharing_unsupported_capability' || code === 'subscription_sharing_route_not_supported') return 'unsupported';
+  if (code === 'chatpass_v2_scope_not_authorized' || code === 'chatpass_v2_invalid_authorization_context' || status === 403) return 'permission';
+  if (code === 'subscription_sharing_usage_unavailable' || code === 'subscription_sharing_user_unavailable' || status === 429 || status >= 500) return 'unavailable';
+  return 'unknown';
+}
 const OMIT = ['background', 'conversation', 'max_output_tokens', 'max_tool_calls', 'metadata', 'moderation', 'multi_agent', 'prompt',
   'prompt_cache_retention', 'safety_identifier', 'temperature', 'top_logprobs', 'top_p', 'truncation', 'user', 'previous_response_id', 'service_tier'];
 const BLOCKED = new Set(['subscription_sharing_usage_limit_exceeded', 'subscription_sharing_user_not_eligible', 'subscription_sharing_invalid_user',
@@ -119,7 +132,7 @@ export async function listChatGPTModels(session: ChatGPTSession, fetchImpl: type
 
 export class ChatGPTClient extends BaseProvider {
   constructor(private readonly session: ChatGPTSession, private readonly media: ResponsesProviderOptions['media'],
-    private readonly onBlocked: (message: string) => void, private readonly fetchImpl: typeof fetch = fetch) { super(); }
+    private readonly onBlocked: (message: string, reason: ChatGPTFailure) => void, private readonly fetchImpl: typeof fetch = fetch) { super(); }
 
   async respond(request: Request, options: GenerateOptions = {}): Promise<Generation> {
     const origin = options.origin ?? { instance: 'chatgpt-plan', module: 'chatgpt-plan', model: request.model ?? '', compatibilityDomain: 'chatgpt-plan' };
@@ -151,8 +164,9 @@ export class ChatGPTClient extends BaseProvider {
           let raw: unknown = null;
           try { raw = await response.json(); } catch { /* Do not record upstream HTML or credentials. */ }
           const code = errorCode(raw, `http_${response.status}`);
-          if (BLOCKED.has(code)) this.onBlocked(subscriptionMessage(code));
-          throw new GenerationError(subscriptionMessage(code), attempts, null, origin, response.status, JSON.stringify({ error: { code } }));
+          const reason = failureReason(code, response.status);
+          if (BLOCKED.has(code)) this.onBlocked(subscriptionMessage(code), reason);
+          throw new ChatGPTError(reason, subscriptionMessage(code), attempts, null, origin, response.status, JSON.stringify({ error: { code } }));
         }
         if (!response.body) throw new Error('ChatGPT 未回傳串流內容。');
         phase = 'stream';
@@ -173,13 +187,14 @@ export class ChatGPTClient extends BaseProvider {
             if (raw.type === 'response.metadata') continue;
             if (raw.type === 'response.failed' || raw.type === 'error') {
               const code = errorCode(raw.response ?? raw, 'response_failed');
-              if (BLOCKED.has(code)) this.onBlocked(subscriptionMessage(code));
-              throw new GenerationError(subscriptionMessage(code), attempts, assembly.snapshot(), origin, response.status, JSON.stringify({ error: { code } }));
+              const reason = failureReason(code, response.status);
+              if (BLOCKED.has(code)) this.onBlocked(subscriptionMessage(code), reason);
+              throw new ChatGPTError(reason, subscriptionMessage(code), attempts, assembly.snapshot(), origin, response.status, JSON.stringify({ error: { code } }));
             }
             if (raw.type === 'response.incomplete') {
               const reason = raw.response?.incomplete_details?.reason;
               const detail = reason === 'max_output_tokens' || reason === 'content_filter' ? `（${reason}）` : '';
-              throw new GenerationError(`ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, assembly.snapshot(), origin, response.status);
+              throw new ChatGPTError('response', `ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, assembly.snapshot(), origin, response.status);
             }
             const event = subscriptionEvent(raw);
             assembly.feed(event, event => options.onEvent?.(event));
@@ -194,7 +209,7 @@ export class ChatGPTClient extends BaseProvider {
         if (result.status !== 'completed') {
           const reason = result.incomplete_details?.reason;
           const detail = reason === 'max_output_tokens' || reason === 'content_filter' ? `（${reason}）` : '';
-          throw new GenerationError(`ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, result, origin, response.status);
+          throw new ChatGPTError('response', `ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, result, origin, response.status);
         }
         return { response: result, origin, attempts };
       } catch (error) {
@@ -202,7 +217,9 @@ export class ChatGPTClient extends BaseProvider {
         if (error instanceof GenerationError) throw error;
         const message = error instanceof ResponseProtocolError ? `ChatGPT 回應格式不符（${PROTOCOL_FAILURES.get(error.message) ?? 'response_protocol'}）。`
           : error instanceof Error && error.message.startsWith('ChatGPT ') ? error.message : `ChatGPT 訂閱連線失敗（${phase}），未記錄原始錯誤內容。`;
-        throw new GenerationError(message, attempts, assembly.snapshot(), origin, attempt.status ?? 0);
+        const reason = timeout.signal.aborted || (error instanceof Error && error.name === 'TimeoutError') ? 'timeout'
+          : phase === 'authentication' ? 'authorization' : phase === 'request' && attempt.status === null ? 'network' : 'response';
+        throw new ChatGPTError(reason, message, attempts, assembly.snapshot(), origin, attempt.status ?? 0);
       } finally {
         clearTimeout(timer);
         attempt.elapsedMs = Date.now() - started;
@@ -212,6 +229,6 @@ export class ChatGPTClient extends BaseProvider {
         attempts.push(attempt);
       }
     }
-    throw new GenerationError('ChatGPT 登入無法使用，請重新登入。', attempts, null, origin, 401);
+    throw new ChatGPTError('authorization', 'ChatGPT 登入無法使用，請重新登入。', attempts, null, origin, 401);
   }
 }

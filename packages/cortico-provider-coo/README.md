@@ -66,6 +66,8 @@ Coo Pet Provider:[Cortico](https://github.com/Pal-AI-Lab/Cortico) 的一个 prov
 
 串流的 `response.metadata` 是傳輸資訊，不加入模型輸出或紀錄，也不視為完成回覆。其他事件仍經過協定驗證，必須收到 `response.completed`；中斷、未完成及額度錯誤仍會停止請求。
 
+`ChatGPTError.reason` 提供固定的失敗分類，涵蓋用量限制、登入、權限、帳號資格、服務不可用、不支援功能、網路、逾時與串流錯誤。HTTP 與串流內的錯誤採用相同分類；分類不包含回應原文。`createChatGPTModule().failureReason()` 提供目前阻擋連線的分類，切換帳號、登出或重新選擇模型時清除。
+
 控制台頁 `llm:chatgpt-plan` 的 `auth` 面板提供 `state`、`models`、`select`、`signin`、`cancel`、`signout`、`usage`。`connectChatGPT` 讓新版導覽共用這套登入服務，沿用已儲存的可用模型，再測試與啟動。設定頁不取得 token 或授權 URL。詳細契約見 [專屬版操作說明](../../docs/PERSONAL.md)。
 
 端点配置示例(`<CORTICO_HOME>/providers/qwen/config.json`,密钥在同目录 `.env` 的 `QWEN_API_KEY`):

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createResponse, type Request } from 'cortico/protocol/open-responses/index.ts';
-import { ChatGPTClient, listChatGPTModels, subscriptionBody, subscriptionEvent } from '../src/chatgpt/client.ts';
+import { ChatGPTClient, ChatGPTError, listChatGPTModels, subscriptionBody, subscriptionEvent } from '../src/chatgpt/client.ts';
 import type { ChatGPTSession } from '../src/chatgpt/types.ts';
 
 const session: ChatGPTSession = { status: () => ({ connected: true, sharing: true, pending: false, email: null, account: 'test', error: null }),
@@ -16,6 +16,50 @@ const events = [{ type: 'response.created', sequence_number: 0, response: { ...c
   { type: 'response.completed', sequence_number: 1, response: completed }];
 
 describe('ChatGPT subscription transport', () => {
+  const failures = [
+    ['subscription_sharing_usage_limit_exceeded', 429, 'usage-limit'],
+    ['subscription_sharing_invalid_user', 401, 'authorization'],
+    ['chatpass_v2_scope_not_authorized', 403, 'permission'],
+    ['chatpass_v2_invalid_authorization_context', 403, 'permission'],
+    ['subscription_sharing_user_not_eligible', 403, 'ineligible'],
+    ['subscription_sharing_usage_unavailable', 503, 'unavailable'],
+    ['subscription_sharing_user_unavailable', 503, 'unavailable'],
+    ['subscription_sharing_unsupported_capability', 400, 'unsupported'],
+    ['subscription_sharing_route_not_supported', 403, 'unsupported'],
+  ] as const;
+  for (const transport of ['http', 'stream']) {
+    it.each(failures)(`classifies ${transport} %s without retaining private error text or retrying inference`, async (code, status, reason) => {
+      let calls = 0;
+      const client = new ChatGPTClient(session, undefined, () => {}, (async () => {
+        calls++;
+        const error = { code, message: 'PRIVATE-ERROR-TEXT', param: 'PRIVATE-INPUT' };
+        return transport === 'http' ? new Response(JSON.stringify({ error }), { status })
+          : eventStream([events[0], { type: 'response.failed', response: { error } }]);
+      }) as typeof fetch);
+      let caught: unknown;
+      try { await client.respond(request); } catch (error) { caught = error; }
+      expect(caught).toBeInstanceOf(ChatGPTError);
+      expect(caught).toMatchObject({ reason, body: JSON.stringify({ error: { code } }) });
+      expect(String(caught)).not.toContain('PRIVATE');
+      expect(calls).toBe(transport === 'http' && status === 401 ? 2 : 1);
+    });
+  }
+
+  it.each([
+    [429, 'unavailable'], [503, 'unavailable'], [403, 'permission'], [401, 'authorization'], [400, 'unknown'],
+  ] as const)('classifies admission HTTP %s without depending on the response body shape', async (status, reason) => {
+    const client = new ChatGPTClient(session, undefined, () => {}, (async () => new Response('{"detail":"PRIVATE-TEXT"}', { status })) as typeof fetch);
+    await expect(client.respond(request)).rejects.toMatchObject({ reason });
+  });
+
+  it.each([
+    [new TypeError('PRIVATE-TEXT'), 'network'], [new DOMException('PRIVATE-TEXT', 'TimeoutError'), 'timeout'],
+  ] as const)('classifies transport failures without exposing the original message', async (error, reason) => {
+    const client = new ChatGPTClient(session, undefined, () => {}, (async () => { throw error; }) as typeof fetch);
+    await expect(client.respond(request)).rejects.toMatchObject({ reason });
+    await expect(client.respond(request)).rejects.not.toThrow('PRIVATE-TEXT');
+  });
+
   it('reads the account-specific catalog without substituting API catalog models', async () => {
     const models = await listChatGPTModels(session, (async () => new Response(JSON.stringify({ models: [
       { slug: 'available-model', display_name: 'Available', visibility: 'list' }, { slug: 'hidden-model', visibility: 'hidden' },
