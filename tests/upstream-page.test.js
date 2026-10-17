@@ -42,12 +42,12 @@ async function fixture(failure = null) {
   watch.start(); await watch.check(); cleanups.push(() => watch.stop());
   const world = new NoticeWorld({ version: 'dev', notesDir: dir, stateFile: join(dir, 'notice.json'), alarmsFile: join(dir, 'alarms.json'),
     newInstall: () => true, read: () => undefined, petConnected: () => false, guiding: () => false, label: () => 'Fixture', upstream: () => watch }, 'UTC');
-  const panel = world.console(LANGUAGE);
+  const panel = world.webUi(LANGUAGE);
   let gate = null;
   const requests = [];
   vi.stubGlobal('fetch', async (url, init = {}) => {
     const method = String(url).split('/').at(-1);
-    expect(String(url).startsWith('/api/console/providers/world%3Acoopanion/panels/updates/')).toBe(true);
+    expect(String(url).startsWith('/api/webui/providers/world%3Acoopanion/panels/updates/')).toBe(true);
     requests.push({ method, init });
     if (method === 'decide' && gate) await gate;
     if (init.signal?.aborted) throw new DOMException('Page closed', 'AbortError');

@@ -1,6 +1,6 @@
 /**
  * 「对话」: the desktop-pet World's chat panel as a page. The person types and sends images as
- * themselves (`[打字]` events, delivered with `preempt`); the pet's lines show as the bubbles the pet
+ * themselves (`[typed]` events, delivered with `preempt`); the pet's lines show as the bubbles the pet
  * itself draws, its questions can be answered here, and the tool steps between two lines fold into
  * one row. Messages the bot has not taken in yet wait above the composer, where they can be sent at
  * once (`interrupt`) or taken back.
@@ -8,7 +8,7 @@
  * Everything shown comes from the World's stream (packages/cortico-world-desktop-pet/src/chat.ts);
  * the phase line is Core's RunPhase as the World passes it on.
  */
-import type { ConsoleImageAttachment } from 'cortico/web/shared/client-panel.ts';
+import type { WebUiImageAttachment } from 'cortico/web/shared/client-panel.ts';
 import { baseLanguage, LANGUAGE } from '../../base/language.ts';
 import type { Page, PageContext } from '../../base/page.ts';
 import { panelStreamRoute } from '../../base/protocol.ts';
@@ -80,15 +80,15 @@ async function mount(ctx: PageContext): Promise<void> {
     for (const [c, at] of refs?.delivered ?? []) deliveredRefs.set(c, at);
   };
   /** What this page sent, by the id it gave, then by cursor: a withdrawn message comes back as typed. */
-  const sentById = new Map<number, { text: string; images: readonly ConsoleImageAttachment[] }>();
-  const sentByCursor = new Map<number, { text: string; images: readonly ConsoleImageAttachment[] }>();
+  const sentById = new Map<number, { text: string; images: readonly WebUiImageAttachment[] }>();
+  const sentByCursor = new Map<number, { text: string; images: readonly WebUiImageAttachment[] }>();
   let nextSend = 1;
   /** Kept across re-renders: what is typed into an open question's own-answer box, and which step lists are expanded. */
   const ownDrafts = new Map<string, string>();
   const expanded = new Set<string>();
 
   // ---- layout
-  // the page's heading as on every page; the run phase and the way to the Terminal page take the note's line
+  // the page's heading as on every page; the run phase and the way to the Console page take the note's line
   const phaseEl = ui.h('span', 'chat-phase');
   const phaseDot = ui.h('span', 'dot');
   const phaseText = ui.h('span');

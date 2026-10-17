@@ -92,6 +92,7 @@ export const COO = {
   id: 'coo',
   title: 'Coo Pet Provider',
   description: 'DeepSeek, Qwen, Kimi, GLM, Doubao, MiniMax, StepFun, Baidu Qianfan, OpenRouter, OpenAI, Anthropic, Gemini and xAI.',
+  describe: { protocols: ['openai-responses', 'openai-chat', 'anthropic-messages', 'gemini'], auth: ['api-key'], local: false, input: ['text', 'image'] },
   localize: (language) => {
     const t = cooText(language);
     return { description: t.description(VENDORS.map((v) => vendorName(v, language))), reasoningTiers: tiers(t.tiers) };
@@ -162,7 +163,7 @@ export const COO = {
       contextWindow: (model) => stated(model) ?? catalog.contextWindow(model),
       compatibilityKey,
       client: protocol === 'chat'
-        ? new VendorChat({ baseUrl: entry.baseUrl, apiKey, media, keepThinking: host.keepThinking, log: host.log, effort })
+        ? new VendorChat({ baseUrl: entry.baseUrl, apiKey, media, keepThinking: host.keepThinking, log: host.log, effort, syntheticReasoning: vendor?.syntheticReasoning })
         : new VendorResponses({
           baseUrl: entry.baseUrl,
           apiKey,

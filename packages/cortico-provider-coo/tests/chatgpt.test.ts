@@ -41,7 +41,7 @@ describe('ChatGPT subscription transport', () => {
       expect(caught).toBeInstanceOf(ChatGPTError);
       expect(caught).toMatchObject({ reason, body: JSON.stringify({ error: { code } }) });
       expect(String(caught)).not.toContain('PRIVATE');
-      expect(calls).toBe(transport === 'http' && status === 401 ? 2 : 1);
+      expect(calls).toBe(1);
     });
   }
 

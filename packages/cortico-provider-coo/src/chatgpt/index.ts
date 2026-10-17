@@ -4,7 +4,7 @@ import type { ModelSpec } from 'cortico/core/types.ts';
 import { ChatGPTClient, listChatGPTModels, type ChatGPTFailure } from './client.ts';
 import { CHATGPT_BASE_URL, CHATGPT_ENDPOINT, CHATGPT_KIND, type ChatGPTSession } from './types.ts';
 
-export function createChatGPTModule(session: ChatGPTSession, onUnavailable: () => void): ProviderModule & { failureReason(): ChatGPTFailure | null } {
+export function createChatGPTModule(session: ChatGPTSession, onUnavailable: () => void): ProviderModule & { failureReason(): ChatGPTFailure | null; clearFailure(): void } {
   let blocked: string | null = null;
   let failure: ChatGPTFailure | null = null;
   let account: string | null = null;
@@ -14,6 +14,8 @@ export function createChatGPTModule(session: ChatGPTSession, onUnavailable: () =
   };
   return {
     failureReason: () => { currentBlock(); return failure; },
+    clearFailure: () => { currentBlock(); blocked = null; failure = null; },
+    describe: { protocols: ['openai-responses'], auth: ['oauth'], local: false, input: ['text', 'image'] },
     id: CHATGPT_KIND, title: 'ChatGPT 訂閱', defaultBaseUrl: CHATGPT_BASE_URL,
     description: '使用 ChatGPT 訂閱額度；不會自動切換付費 API。',
     reasoningTiers: [], effortSuggestions: ['low', 'medium', 'high'], serviceTiers: [],
@@ -22,7 +24,7 @@ export function createChatGPTModule(session: ChatGPTSession, onUnavailable: () =
     availability: () => ({ ready: session.status().sharing && !currentBlock(), reason: currentBlock() ?? session.status().error ?? '請先登入 ChatGPT 並授權使用訂閱額度。' }),
     accepts: (entry, _spec, mime) => entry.multimodal === true && mime.startsWith('image/'),
     prices: () => [],
-    console: host => ({
+    webUi: host => ({
       panels: [{ id: 'auth', title: 'ChatGPT 訂閱連線', builtin: 'connection-protocol' }],
       invoke: async (panel, method, args) => {
         if (panel !== 'auth') throw new Error('Unknown ChatGPT panel');

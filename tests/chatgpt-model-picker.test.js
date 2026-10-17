@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ProviderRegistry } from 'cortico/providers/registry.ts';
-import { ProviderSettings } from 'cortico/providers/console/settings.ts';
+import { ProviderSettings } from 'cortico/providers/webui/settings.ts';
 import { nullLogger } from 'cortico/core/util.ts';
 import { createChatGPTModule } from '../packages/cortico-provider-coo/src/chatgpt/index.ts';
 import { CHATGPT_BASE_URL, CHATGPT_ENDPOINT, CHATGPT_KIND } from '../packages/cortico-provider-coo/src/chatgpt/types.ts';

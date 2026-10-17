@@ -14,7 +14,7 @@ import { RESERVED_FRAME_NAMES } from 'cortico/core/loop.ts';
 import { blobLine } from 'cortico/core/blobs.ts';
 import COO, { OFF_PEAK, VENDORS, VENDOR_ICONS, protocolOf, vendorEntry, vendorOf } from '../src/index.ts';
 import { PROTOCOLS, endpointName, locate, regionsOf, siteOf } from '../src/vendors.ts';
-import { connectVendor, type ConsoleCall } from '../src/connect.ts';
+import { connectVendor, type WebUiCall } from '../src/connect.ts';
 
 const entry = (patch: Partial<LLMProviderEntry> = {}): LLMProviderEntry => ({
   kind: 'coo', baseUrl: 'https://api.deepseek.com', secret: 'KEY',
@@ -135,6 +135,37 @@ describe('Coo Pet Provider', () => {
       .filter((i) => i.type === 'function_call_output' && (i.call_id === 'c1' || i.call_id === 'c2'));
     expect(outputs[0].output).toBe(blobLine(shot('blob:a.jpg')));
     expect(outputs[1].output).toContainEqual(expect.objectContaining({ type: 'input_image' }));
+  });
+
+  it('gives DeepSeek over Chat placeholder reasoning on tool calls after the newest user message while thinking is on', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const reply = { id: 'c', model: 'deepseek-flash', choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } };
+    vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body) as Record<string, unknown>);
+      return new Response(JSON.stringify(reply), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const [frame] = RESERVED_FRAME_NAMES;
+    const context = [
+      message('user', '开始'),
+      functionCall('c0', 'look', '{}'), functionResult('c0', '桌面'),
+      message('user', '现在呢'),
+      functionCall('f1', frame!, '{}'), functionResult('f1', '[打字] 几点了'),
+    ];
+    const send = async (thinking: boolean) => {
+      const instance = COO.create('deepseek', entry({ options: { protocol: 'chat' }, spec: { model: 'deepseek-flash', thinking, reasoningEffort: 'low' } }), host() as never);
+      await instance.client.respond({ model: 'deepseek-flash', input: context.map((r) => r.item), reasoning: { effort: thinking ? 'low' : 'none' } } as unknown as Request, { context });
+      const calls = (bodies.at(-1)!.messages as Array<{ tool_calls?: Array<{ id: string }>; reasoning_content?: string }>).filter((m) => m.tool_calls);
+      return Object.fromEntries(calls.map((m) => [m.tool_calls![0].id, m.reasoning_content]));
+    };
+    try {
+      // the service answers 400 for a call after the newest user message without reasoning; earlier calls pass
+      expect(await send(true)).toEqual({ c0: undefined, f1: '-' });
+      expect(await send(false)).toEqual({ c0: undefined, f1: undefined });
+      expect(bodies.at(-1)!.reasoning_effort).toBe('none');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('moves tool result images into a user message after them for a service whose tool output takes text only', async () => {
@@ -303,7 +334,7 @@ describe('Coo Pet Provider', () => {
   });
 });
 
-describe('connecting a service through the console routes', () => {
+describe('connecting a service through the WebUI routes', () => {
   /** A console that knows the endpoints in `existing`, records every call, and tests with `testOk`. */
   function fakeConsole(existing: string[], testOk: boolean) {
     const calls: Array<[string, unknown]> = [];
@@ -313,7 +344,7 @@ describe('connecting a service through the console routes', () => {
       if (path.endsWith('/test')) return testOk ? { ok: true, elapsedMs: 42 } : { ok: false, hint: '密钥无效' };
       if (body === undefined) return { name: path.split('/').pop(), entry: { kind: 'coo', spec: { model: 'mine' } }, revision: 'r1' };
       return {};
-    }) as ConsoleCall;
+    }) as WebUiCall;
     return { call, calls };
   }
   const qwen = VENDORS.find((v) => v.id === 'qwen')!;

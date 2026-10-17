@@ -7,7 +7,7 @@ import { modelPicker } from './model-picker.ts';
 
 interface State { connected: boolean; sharing: boolean; pending: boolean; email: string | null; error: string | null; blocked: string | null; account: string | null; selectedModel: string | null }
 interface Model { id: string; displayName?: string }
-const AUTH_PATH = '/api/console/providers/llm%3Achatgpt-plan/panels/auth/';
+const AUTH_PATH = '/api/webui/providers/llm%3Achatgpt-plan/panels/auth/';
 
 export function mountChatGPT(ctx: PageContext) {
   const { ui, root, signal } = ctx;

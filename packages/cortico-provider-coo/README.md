@@ -62,13 +62,13 @@ Coo Pet Provider:[Cortico](https://github.com/Pal-AI-Lab/Cortico) 的一个 prov
 
 這個本機專屬版本保留第二個 provider 模組 `chatgpt-plan`，由 `createChatGPTModule` 接收主程式提供的 session capability。帳號憑證由 `app/chatgpt-auth.cjs` 以 Windows DPAPI 加密，透過私有 IPC 提供給 Core；不保存於端點 `.env`。
 
-`client.ts` 固定使用官方 Responses 與 models 端點，拒絕重新導向，傳送 `stream: true`、`store: false`，工具使用 `coo` namespace。訂閱額度或授權限制會暫停投遞，確認恢復後須手動測試並重新開始；不會切換付費 API。
+`client.ts` 固定使用官方 Responses 與 models 端點，拒絕重新導向，傳送 `stream: true`、`store: false`，工具使用 `coo` namespace。每次推論只嘗試一次，HTTP 401 也不重送；請求前仍可更新到期憑證。失敗會阻擋後續請求並通知 Core 暫停與中止目前輪次，確認恢復後須手動測試並重新開始；不會切換付費 API。
 
 串流的 `response.metadata` 是傳輸資訊，不加入模型輸出或紀錄，也不視為完成回覆。其他事件仍經過協定驗證，必須收到 `response.completed`；中斷、未完成及額度錯誤仍會停止請求。
 
-`ChatGPTError.reason` 提供固定的失敗分類，涵蓋用量限制、登入、權限、帳號資格、服務不可用、不支援功能、網路、逾時與串流錯誤。HTTP 與串流內的錯誤採用相同分類；分類不包含回應原文。`createChatGPTModule().failureReason()` 提供目前阻擋連線的分類，切換帳號、登出或重新選擇模型時清除。
+`ChatGPTError.reason` 提供固定的失敗分類，涵蓋用量限制、登入、權限、帳號資格、服務不可用、不支援功能、網路、逾時與串流錯誤。HTTP 與串流內的錯誤採用相同分類；分類不包含回應原文。`createChatGPTModule().failureReason()` 提供目前阻擋連線的分類，切換帳號、登出或重新選擇模型時清除。`clearFailure()` 供明確的版本分析重試清除本機阻擋狀態，不發送請求或恢復一般對話。
 
-控制台頁 `llm:chatgpt-plan` 的 `auth` 面板提供 `state`、`models`、`select`、`signin`、`cancel`、`signout`、`usage`。`connectChatGPT` 讓新版導覽共用這套登入服務，沿用已儲存的可用模型，再測試與啟動。設定頁不取得 token 或授權 URL。詳細契約見 [專屬版操作說明](../../docs/PERSONAL.md)。
+WebUI 頁 `llm:chatgpt-plan` 的 `auth` 面板提供 `state`、`models`、`select`、`signin`、`cancel`、`signout`、`usage`。`connectChatGPT` 讓新版導覽共用這套登入服務，沿用已儲存的可用模型，再測試與啟動。設定頁不取得 token 或授權 URL。詳細契約見 [專屬版操作說明](../../docs/PERSONAL.md)。
 
 端点配置示例(`<CORTICO_HOME>/providers/qwen/config.json`,密钥在同目录 `.env` 的 `QWEN_API_KEY`):
 
@@ -83,4 +83,4 @@ Coo Pet Provider:[Cortico](https://github.com/Pal-AI-Lab/Cortico) 的一个 prov
 ```
 
 0.1.x 叫 `cortico-provider-deepseek`(`kind: "deepseek"`);Coopanion 启动时把旧端点的 `kind` 改成 `coo`。
-在 Coopanion 里它随应用注册;单独使用时按 Cortico 的扩展方式安装(`cortico.kind = provider`,`api = 5`)。
+在 Coopanion 里它随应用注册;单独使用时按 Cortico 的扩展方式安装(`cortico.kind = provider`,`api = 6`)。

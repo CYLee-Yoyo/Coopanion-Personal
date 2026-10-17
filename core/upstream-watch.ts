@@ -17,6 +17,7 @@ export interface UpstreamWatchOptions {
   language: () => Language;
   subscription: () => SubscriptionReviewBinding | null;
   subscriptionFailure?: () => UpstreamFailure | null;
+  retrySubscription?: () => void;
   paused: () => boolean;
   canNotify: () => boolean;
   notify: (report: UpstreamReport) => { answer: Promise<PetChoice>; close(): void };
@@ -155,6 +156,7 @@ export class UpstreamWatch {
         this.save({ phase: failed ? 'failed' : 'interrupted', error: failed ? previous.error : null, failure: failed ? previous.failure : null });
         return this.snapshot();
       }
+      if (manual && retry) this.options.retrySubscription?.();
       const binding = this.options.subscription();
       if (!binding || (!manual && this.options.paused())) { this.waitForSubscription(); return this.snapshot(); }
       const diff = await this.source.diff(latest, signal);

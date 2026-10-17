@@ -286,6 +286,24 @@ describe('subscription review and local lifecycle', () => {
     expect(resumed.sent).toHaveLength(0);
   });
 
+  it('clears a subscription block only for an explicit retry, even while ordinary activity is paused', async () => {
+    let available = true; let calls = 0;
+    const f = fixture({ paused: () => true,
+      subscription: () => available ? { client: f.client, model: 'fixture-model' } : null,
+      retrySubscription: () => { available = true; },
+    }, (async () => {
+      calls++;
+      if (calls === 1) { available = false; return new Response('{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}', { status: 429 }); }
+      return sse();
+    }) as typeof fetch);
+    f.watch.start(); await f.watch.check(); await f.watch.check(true);
+    expect(f.watch.snapshot()).toMatchObject({ phase: 'failed', failure: 'usage-limit' });
+    await f.watch.check(); await f.watch.check(true);
+    expect(available).toBe(false); expect(calls).toBe(1);
+    await f.watch.check(true, true);
+    expect(calls).toBe(2); expect(f.watch.snapshot()).toMatchObject({ phase: 'ready', failure: null });
+  });
+
   it('replaces unrecognized stored reasons with a fixed category', async () => {
     const f = fixture(); f.watch.start(); await f.watch.check(); await f.watch.stop();
     writeFileSync(join(f.dir, 'state.json'), JSON.stringify({ ...f.watch.snapshot(), failure: 'PRIVATE-CREDENTIAL-TEXT' }));

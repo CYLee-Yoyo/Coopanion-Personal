@@ -272,6 +272,7 @@ const en: PetText = {
     voice: 'Voice input',
     enable: 'Turn on voice input',
     enabledHint: 'The microphone stays open; speech goes to Coo by the listening mode',
+    enabledHintOnPress: 'The microphone opens while the talk key is held and closes after release',
     disabledHint: 'Off: the microphone stays closed, and the settings below wait',
     engine: 'Recognition engine',
     funasr: 'FunASR (on this computer)',
@@ -300,6 +301,10 @@ const en: PetText = {
     micN: (n: number) => `Microphone ${n}`,
     mode: 'How it listens',
     modes: { hold: 'While the talk key is held', toggle: 'The talk key switches it on and off', always: 'All the time' },
+    openOnPress: 'Open the microphone only while held',
+    openOnPressHint: 'Turn on for headsets, such as Bluetooth ones, that switch to call mode while the microphone is open; after pressing, wait a moment before speaking, or the first words may be missed',
+    switchOn: 'On',
+    switchOff: 'Off',
     /** How the talk key is pressed, for holding and for switching, by the number of presses. */
     presses: {
       2: { hold: 'Double-press and hold', toggle: 'Double-press to start and again to stop' },

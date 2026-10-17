@@ -245,6 +245,7 @@ const es419: Translation<PetText> = {
     voice: 'Entrada de voz',
     enable: 'Activar la entrada de voz',
     enabledHint: 'El micrófono queda abierto; lo que dices llega a Coo según el modo de escucha',
+    enabledHintOnPress: 'El micrófono se abre mientras mantienes la tecla para hablar y se cierra al soltarla',
     disabledHint: 'Desactivada: el micrófono queda cerrado y la configuración de abajo espera',
     engine: 'Motor de reconocimiento',
     funasr: 'FunASR (en esta computadora)',
@@ -273,6 +274,10 @@ const es419: Translation<PetText> = {
     micN: (n: number) => `Micrófono ${n}`,
     mode: 'Cómo escucha',
     modes: { hold: 'Mientras se mantiene la tecla para hablar', toggle: 'La tecla para hablar lo activa y desactiva', always: 'Todo el tiempo' },
+    openOnPress: 'Abrir el micrófono solo al mantener la tecla',
+    openOnPressHint: 'Para auriculares, como los Bluetooth, que pasan al modo llamada con el micrófono abierto; después de presionar, espera un momento antes de hablar o se pueden perder las primeras palabras',
+    switchOn: 'Activado',
+    switchOff: 'Desactivado',
     presses: {
       2: { hold: 'Presionar dos veces y mantener', toggle: 'Presionar dos veces para empezar y otra vez para parar' },
       1: { hold: 'Solo mantener', toggle: 'Presionar para empezar y otra vez para parar' },

@@ -9,7 +9,7 @@ import { CHATGPT, CHATGPT_MODULE, chatgptEntry, connectionVendor, endpointName, 
 import type { ChatGPTStatus } from './chatgpt/types.ts';
 
 /** GET when `body` is left out, POST otherwise; throws on an error status. */
-export type ConsoleCall = <T>(path: string, body?: unknown) => Promise<T>;
+export type WebUiCall = <T>(path: string, body?: unknown) => Promise<T>;
 
 export interface Connection {
   /** The active endpoint has its model and key and its module is available. */
@@ -29,14 +29,14 @@ interface TestReply { ok?: boolean; elapsedMs?: number; error?: string; status?:
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-export async function currentConnection(call: ConsoleCall): Promise<Connection> {
+export async function currentConnection(call: WebUiCall): Promise<Connection> {
   const mc = (await call<Status>('/api/status').catch(() => null))?.modelConnection;
   const at = mc ? connectionVendor(mc) : null;
   return { ready: !!mc?.ready, vendor: at?.vendor ?? null, region: at?.region ?? null, model: mc?.model ?? '' };
 }
 
 /** Tests the endpoint `name` as it is saved. */
-export async function testEndpoint(call: ConsoleCall, name: string): Promise<ConnectResult> {
+export async function testEndpoint(call: WebUiCall, name: string): Promise<ConnectResult> {
   try {
     const r = await call<TestReply>(`/api/providers/${encodeURIComponent(name)}/test`, {});
     const ok = r?.ok !== false && !r?.error;
@@ -53,7 +53,7 @@ export async function testEndpoint(call: ConsoleCall, name: string): Promise<Con
  * `model` keeps the endpoint's model, or takes the service's default for a new endpoint. `region`
  * matters only for a service with a platform per region.
  */
-export async function connectVendor(call: ConsoleCall, vendor: Vendor, key: string, model = '', region: Region = 'cn'): Promise<ConnectResult> {
+export async function connectVendor(call: WebUiCall, vendor: Vendor, key: string, model = '', region: Region = 'cn'): Promise<ConnectResult> {
   const secretValue = key.trim() || undefined;
   const typed = model.trim();
   const name = endpointName(vendor, region);
@@ -77,7 +77,7 @@ export async function connectVendor(call: ConsoleCall, vendor: Vendor, key: stri
 }
 
 /** Tests the endpoint `name` and, once the test passes, makes it the active endpoint and resumes the run. */
-async function testAndStart(call: ConsoleCall, name: string): Promise<ConnectResult> {
+async function testAndStart(call: WebUiCall, name: string): Promise<ConnectResult> {
   const r = await testEndpoint(call, name);
   if (!r.ok) return r;
   try {
@@ -103,7 +103,7 @@ export interface SignInState {
 export const SIGN_IN_PANEL = 'auth';
 
 /** The console route of a sign-in method of the `chatgpt` module. */
-const signInRoute = (method: string) => `/api/console/providers/${encodeURIComponent(`llm:${CHATGPT_MODULE}`)}/panels/${SIGN_IN_PANEL}/${method}`;
+const signInRoute = (method: string) => `/api/webui/providers/${encodeURIComponent(`llm:${CHATGPT_MODULE}`)}/panels/${SIGN_IN_PANEL}/${method}`;
 
 const signInState = (state: ChatGPTStatus): SignInState => ({
   signedIn: state.sharing,
@@ -112,11 +112,11 @@ const signInState = (state: ChatGPTStatus): SignInState => ({
   reason: state.error,
 });
 
-export const chatgptState = async (call: ConsoleCall, _name: string): Promise<SignInState> =>
+export const chatgptState = async (call: WebUiCall, _name: string): Promise<SignInState> =>
   signInState(await call<ChatGPTStatus>(signInRoute('state'), { args: [] }));
 
 /** Revokes and removes the tokens of the ChatGPT endpoint `name`. */
-export const signOutChatGPT = async (call: ConsoleCall, _name: string): Promise<SignInState> =>
+export const signOutChatGPT = async (call: WebUiCall, _name: string): Promise<SignInState> =>
   signInState(await call<ChatGPTStatus>(signInRoute('signout'), { args: [] }));
 
 /** How often a sign-in under way is looked at. */
@@ -135,7 +135,7 @@ interface SignInOptions { signal?: AbortSignal; pollMs?: number }
  * Electron main opens the authorization page and owns the callback. The caller polls public state;
  * leaving the caller stops that wait without exporting an authorization URL or credentials.
  */
-export async function signInChatGPT(call: ConsoleCall, name: string, _open: (url: string) => void, opts: SignInOptions = {}): Promise<SignInState> {
+export async function signInChatGPT(call: WebUiCall, name: string, _open: (url: string) => void, opts: SignInOptions = {}): Promise<SignInState> {
   await call(signInRoute('signin'), { args: [] });
   let state: SignInState;
   do {
@@ -149,7 +149,7 @@ export async function signInChatGPT(call: ConsoleCall, name: string, _open: (url
  * Connects the personal subscription endpoint using the account's catalog. A saved available model
  * is retained; a new endpoint takes the first available model. Only a successful test starts the run.
  */
-export async function connectChatGPT(call: ConsoleCall, open: (url: string) => void, opts: SignInOptions & { name?: string } = {}): Promise<ConnectResult> {
+export async function connectChatGPT(call: WebUiCall, open: (url: string) => void, opts: SignInOptions & { name?: string } = {}): Promise<ConnectResult> {
   const name = opts.name ?? endpointName(CHATGPT, 'cn');
   if (name !== CHATGPT_MODULE) return { ok: false, ms: null, why: 'Unknown personal subscription endpoint' };
   try {

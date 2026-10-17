@@ -245,6 +245,7 @@ const zhHant: Translation<PetText> = {
     voice: '語音輸入',
     enable: '開啟語音輸入',
     enabledHint: '麥克風保持開啟，依收音方式傳送給 Coo',
+    enabledHintOnPress: '按住說話鍵時開啟麥克風，放開後關閉',
     disabledHint: '已關閉：不開啟麥克風，下面的設定暫不生效',
     engine: '辨識引擎',
     funasr: 'FunASR（本機辨識）',
@@ -273,6 +274,10 @@ const zhHant: Translation<PetText> = {
     micN: (n: number) => `麥克風 ${n}`,
     mode: '收音方式',
     modes: { hold: '按住說話鍵時收音', toggle: '用說話鍵切換收音', always: '持續收音' },
+    openOnPress: '按住時才開啟麥克風',
+    openOnPressHint: '使用藍牙耳機等一開啟麥克風就切到通話模式的耳機時開啟；按下後稍等再說話，否則開頭的字可能聽不到',
+    switchOn: '已開啟',
+    switchOff: '已關閉',
     presses: {
       2: { hold: '按兩下再按住', toggle: '按兩下開始，再按兩下停止' },
       1: { hold: '直接按住', toggle: '按一下開始，再按一下停止' },

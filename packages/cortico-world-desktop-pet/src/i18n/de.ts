@@ -245,6 +245,7 @@ const de: Translation<PetText> = {
     voice: 'Spracheingabe',
     enable: 'Spracheingabe einschalten',
     enabledHint: 'Das Mikrofon bleibt offen; was du sagst, geht je nach Zuhörmodus an Coo',
+    enabledHintOnPress: 'Das Mikrofon öffnet sich, solange die Sprechtaste gehalten wird, und schließt sich nach dem Loslassen',
     disabledHint: 'Aus: Das Mikrofon bleibt geschlossen, und die Einstellungen unten warten',
     engine: 'Erkennungs-Engine',
     funasr: 'FunASR (auf diesem Computer)',
@@ -273,6 +274,10 @@ const de: Translation<PetText> = {
     micN: (n: number) => `Mikrofon ${n}`,
     mode: 'Wie es zuhört',
     modes: { hold: 'Solange die Sprechtaste gehalten wird', toggle: 'Die Sprechtaste schaltet es ein und aus', always: 'Die ganze Zeit' },
+    openOnPress: 'Mikrofon nur beim Halten öffnen',
+    openOnPressHint: 'Für Headsets, etwa Bluetooth, die bei offenem Mikrofon in den Anrufmodus wechseln; nach dem Drücken kurz warten und dann sprechen, sonst können die ersten Wörter fehlen',
+    switchOn: 'An',
+    switchOff: 'Aus',
     presses: {
       2: { hold: 'Zweimal drücken und halten', toggle: 'Zweimal drücken zum Starten, wieder zum Beenden' },
       1: { hold: 'Einfach halten', toggle: 'Drücken zum Starten, erneut drücken zum Beenden' },

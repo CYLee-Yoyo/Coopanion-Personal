@@ -1,10 +1,11 @@
 /**
- * The console HTTP API as the settings window uses it (console/), against a real Cortico bot: the
+ * The WebUI HTTP API as the settings window uses it (console/), against a real Cortico bot: the
  * routes, the request shapes they take and the fields of the replies the window reads. A Cortico
  * change to one of these fails here. The bot is Cormini with a `probe` World standing in for the
  * desktop-pet World's panel and stream, and an empty extensions directory; delivery stays paused, so no
  * model is called. Routes that reach the npm registry (extension search, updates, package details,
- * install, uninstall) and the native path picker's dialog are not called.
+ * install, uninstall) or GitHub (the market's sign-in, comments, votes once signed in) and the native path
+ * picker's dialog are not called.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -16,7 +17,7 @@ import type { CoreConfig, WorldStreamSocket } from 'cortico/core/types.ts';
 import { loadDeployment } from 'cortico/deploy.ts';
 import { loadExtensions } from 'cortico/extensions.ts';
 import { withWorlds, type WorldDefinition } from 'cortico/world.ts';
-import { TERMINAL } from 'cortico/worlds/terminal/definition.ts';
+import { CONSOLE } from 'cortico/worlds/console/definition.ts';
 import { noticeDefinition } from '../core/notice.ts';
 import { UpstreamWatch } from '../core/upstream-watch.ts';
 import { UPSTREAM_BASE } from '../core/personal-upstream.ts';
@@ -37,7 +38,7 @@ const PROBE: WorldDefinition = {
     tools: () => [],
     start: async () => {},
     stop: async () => {},
-    console: () => ({
+    webUi: () => ({
       panels: [{ id: 'pet', title: 'Pet' }],
       invoke: async (_panel: string, method: string, args: unknown[]) => {
         if (method === 'fail') throw new Error('probe failed');
@@ -80,11 +81,11 @@ beforeAll(async () => {
   const notice = noticeDefinition({ version: 'dev', notesDir: dir, stateFile: join(dir, 'notice.json'), alarmsFile: join(dir, 'alarms.json'),
     newInstall: () => true, read: () => undefined, petConnected: () => false, guiding: () => false, label: () => 'Fixture notices', upstream: () => releaseWatch });
   const cormini = (await import(join(CORTICO, 'bots', 'cormini', 'index.ts'))).default as BotDefinition<CoreConfig>;
-  const definition = withWorlds({ ...cormini, declares: [...(cormini.declares ?? []), PROBE.id, notice.id] }, [TERMINAL, PROBE, notice] as WorldDefinition[]);
+  const definition = withWorlds({ ...cormini, declares: [...(cormini.declares ?? []), PROBE.id, notice.id] }, [CONSOLE, PROBE, notice] as WorldDefinition[]);
   const loaded = loadDeployment(definition, dir, CORTICO);
   loaded.config.web.port = 0;
   process.env.CORTICO_EXTENSIONS_DIR = join(dir, 'extensions');
-  const extensions = await loadExtensions(CORTICO, { reserved: [TERMINAL.id, PROBE.id] });
+  const extensions = await loadExtensions(CORTICO, { reserved: [CONSOLE.id, PROBE.id] });
   bot = createBot(loaded, definition, { extensions });
   bot.core.bus.setPaused(true);
   base = `http://127.0.0.1:${(await bot.start()).port}`;
@@ -96,8 +97,8 @@ afterAll(async () => {
 });
 
 /**
- * Routes outside the public table of Cortico's docs/console.md that the advanced mode's pages (the copies of
- * Cortico's console pages under console/advanced/) use: Cortico's internal routes, which only that
+ * Routes outside the public table of Cortico's docs/webui.md that the advanced mode's pages (the copies of
+ * Cortico's WebUI pages under console/advanced/) use: Cortico's internal routes, which only that
  * directory may call. A Cortico change to one fails here at the submodule bump.
  */
 describe('routes the advanced mode uses beyond the public table', () => {
@@ -108,18 +109,18 @@ describe('routes the advanced mode uses beyond the public table', () => {
   });
 
   it('manifest and lamps: every page with its panels; the lamps by page id', async () => {
-    const manifest = await json(await get('/api/console/manifest'));
+    const manifest = await json(await get('/api/webui/manifest'));
     expect(manifest.body.protocolVersion).toEqual(expect.any(Number));
     const probe = manifest.body.providers.find((p: { id: string }) => p.id === PROBE_PAGE);
     expect(probe).toMatchObject({ id: PROBE_PAGE, kind: 'world', label: expect.any(String), availability: 'active', panels: [expect.objectContaining({ id: 'pet', title: 'Pet' })] });
-    expect((await json(await get('/api/console/lamps'))).body.lamps).toEqual(expect.any(Object));
+    expect((await json(await get('/api/webui/lamps'))).body.lamps).toEqual(expect.any(Object));
   });
 
-  it('run: the boot id the Terminal page watches for a restart', async () => {
+  it('run: the boot id the Console page watches for a restart', async () => {
     expect((await json(await get('/api/run/lifecycle'))).body).toEqual({ deployment: expect.any(String), bootId: expect.any(String), ready: expect.any(Boolean) });
   });
 
-  it('events, runs, the run log and diagnostics for the Core and Terminal pages', async () => {
+  it('events, runs, the run log and diagnostics for the Core and Console pages', async () => {
     expect((await json(await get('/api/events?limit=5'))).body).toMatchObject({ latest: expect.any(Number), events: expect.any(Array) });
     const runs = await json(await get('/api/runs'));
     expect(runs.body).toMatchObject({ current: expect.any(String), runs: expect.any(Array) });
@@ -151,9 +152,9 @@ describe('routes the advanced mode uses beyond the public table', () => {
   it('Worlds: the list, visibility, restart, activation', async () => {
     const { body } = await json(await get('/api/worlds'));
     expect(body.worlds).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'probe' })]));
-    expect((await json(await post('/api/worlds/visibility', { id: 'terminal', visible: true }))).body).toMatchObject({ result: expect.any(String), visibility: expect.any(Object) });
-    expect((await json(await post('/api/worlds/restart', { id: 'terminal' }))).body).toMatchObject({ result: expect.any(String) });
-    expect((await json(await post('/api/worlds/activation', { id: 'terminal', enabled: true }))).body).toMatchObject({ result: expect.any(String) });
+    expect((await json(await post('/api/worlds/visibility', { id: CONSOLE.id, visible: true }))).body).toMatchObject({ result: expect.any(String), visibility: expect.any(Object) });
+    expect((await json(await post('/api/worlds/restart', { id: CONSOLE.id }))).body).toMatchObject({ result: expect.any(String) });
+    expect((await json(await post('/api/worlds/activation', { id: CONSOLE.id, enabled: true }))).body).toMatchObject({ result: expect.any(String) });
   });
 
   it('model modules: the list, a draft endpoint\'s config groups; an endpoint deleted at its revision', async () => {
@@ -175,6 +176,16 @@ describe('routes the advanced mode uses beyond the public table', () => {
     expect(check.body.ok === false || typeof check.body.error === 'string').toBe(true);
   });
 
+  it('the extension market signed out: no GitHub account; a vote or a comment answers 428 to ask for a sign-in', async () => {
+    expect((await json(await get('/api/extensions/github'))).body).toEqual({});
+    expect((await json(await post('/api/extensions/github/logout'))).body).toEqual({ ok: true });
+    for (const [path, body] of [['/api/extensions/vote', { name: 'cortico-world-none', vote: 'up' }], ['/api/extensions/comments', { name: 'cortico-world-none', body: 'hi' }]] as const) {
+      const reply = await json(await post(path, body));
+      expect(reply.status).toBe(428);
+      expect(reply.body.error).toEqual(expect.any(String));
+    }
+  });
+
   it('the path picker refuses a request it cannot read', async () => {
     const { status, body } = await json(await post('/api/path-picker', { kind: 'nonsense' }));
     expect(status).toBe(400);
@@ -192,7 +203,7 @@ describe('routes the advanced mode uses beyond the public table', () => {
   });
 });
 
-describe('the console API the settings window reads', () => {
+describe('the WebUI API the settings window reads', () => {
   it('status: the name, whether the run is paused, and the active endpoint', async () => {
     const { status, body } = await json(await get('/api/status'));
     expect(status).toBe(200);
@@ -257,7 +268,7 @@ describe('the console API the settings window reads', () => {
   it('prompts: the prefix by segment, a reset of a deployment override, the reload of the current prefix', async () => {
     const prefix = await json(await get('/api/prompts/prefix'));
     expect(prefix.body.segments).toEqual(expect.arrayContaining([expect.objectContaining({ title: expect.any(String), text: expect.any(String) })]));
-    expect((await json(await post('/api/prompts/reset', { key: 'worlds.terminal.envPrompt' }))).body).toMatchObject({ result: expect.any(String) });
+    expect((await json(await post('/api/prompts/reset', { key: 'worlds.console.envPrompt' }))).body).toMatchObject({ result: expect.any(String) });
     expect((await json(await post('/api/session/reload-prefix'))).body).toMatchObject({ result: expect.any(String) });
   });
 
@@ -268,7 +279,7 @@ describe('the console API the settings window reads', () => {
   });
 
   it('panel methods: POST with { args } returns what the method returns; a throw is a status with { error }', async () => {
-    const route = `/api/console/providers/${encodeURIComponent(PROBE_PAGE)}/panels/pet`;
+    const route = `/api/webui/providers/${encodeURIComponent(PROBE_PAGE)}/panels/pet`;
     expect((await json(await post(`${route}/state`, { args: [1, 'two'] }))).body).toEqual({ method: 'state', args: [1, 'two'] });
     const failed = await json(await post(`${route}/fail`, { args: [] }));
     expect(failed.status).toBeGreaterThanOrEqual(400);
@@ -276,7 +287,7 @@ describe('the console API the settings window reads', () => {
   });
 
   it('release tracking uses the public panel contract and exposes no installation operation', async () => {
-    const route = `/api/console/providers/${encodeURIComponent('world:coopanion')}/panels/updates`;
+    const route = `/api/webui/providers/${encodeURIComponent('world:coopanion')}/panels/updates`;
     const state = await json(await post(`${route}/state`, { args: [] }));
     expect(state.status).toBe(200);
     expect(state.body).toMatchObject({ baseline: UPSTREAM_BASE.version, intervalHours: 6, enabled: true });

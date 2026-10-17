@@ -27,8 +27,6 @@ function failureReason(code: string, status: number): ChatGPTFailure {
 }
 const OMIT = ['background', 'conversation', 'max_output_tokens', 'max_tool_calls', 'metadata', 'moderation', 'multi_agent', 'prompt',
   'prompt_cache_retention', 'safety_identifier', 'temperature', 'top_logprobs', 'top_p', 'truncation', 'user', 'previous_response_id', 'service_tier'];
-const BLOCKED = new Set(['subscription_sharing_usage_limit_exceeded', 'subscription_sharing_user_not_eligible', 'subscription_sharing_invalid_user',
-  'chatpass_v2_scope_not_authorized', 'chatpass_v2_invalid_authorization_context']);
 const PROTOCOL_FAILURES = new Map([
   ['Unknown Open Responses event type', 'event_type'],
   ['Non-increasing event sequence', 'event_sequence'],
@@ -139,96 +137,91 @@ export class ChatGPTClient extends BaseProvider {
     const attempts: ProviderAttempt[] = [];
     const generationId = randomUUID();
     const body = subscriptionBody(request, options, this.media);
-    for (let ordinal = 0; ordinal < 2; ordinal++) {
-      const assembly = new ChatGPTResponseAssembly();
-      const started = Date.now();
-      const attempt: ProviderAttempt = { id: randomUUID(), generationId, ordinal, origin, startedAt: new Date().toISOString(), elapsedMs: 0,
-        requestId: null, responseId: null, outcome: 'failed', status: null, serviceTier: null, purpose: options.diagnostic ? 'diagnostic' : 'generation', meters: unknownMeters(), charges: [] };
-      const timeout = new AbortController();
-      const signals = [options.signal, this.session.signal?.(), timeout.signal].filter((signal): signal is AbortSignal => Boolean(signal));
-      const signal = AbortSignal.any(signals);
-      let timer = setTimeout(() => timeout.abort(new Error('ChatGPT 回應逾時。')), 300_000);
-      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-      let phase = 'authentication';
-      try {
-        signal.throwIfAborted();
-        const token = await this.session.token(ordinal > 0);
-        signal.throwIfAborted();
-        phase = 'request';
-        const response = await this.fetchImpl(`${CHATGPT_BASE_URL}/responses`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: bearerHeader(token.accessToken) },
-          body: requestJson(body), redirect: 'error', signal });
-        attempt.status = response.status;
-        attempt.requestId = response.headers.get('x-request-id');
-        if (response.status === 401 && ordinal === 0) { await response.body?.cancel(); continue; }
-        if (!response.ok) {
-          let raw: unknown = null;
-          try { raw = await response.json(); } catch { /* Do not record upstream HTML or credentials. */ }
-          const code = errorCode(raw, `http_${response.status}`);
-          const reason = failureReason(code, response.status);
-          if (BLOCKED.has(code)) this.onBlocked(subscriptionMessage(code), reason);
-          throw new ChatGPTError(reason, subscriptionMessage(code), attempts, null, origin, response.status, JSON.stringify({ error: { code } }));
-        }
-        if (!response.body) throw new Error('ChatGPT 未回傳串流內容。');
-        phase = 'stream';
-        reader = response.body.getReader();
-        const frames = new EventDecoder();
-        const decoder = new TextDecoder();
-        let terminal = false;
-        read: for (;;) {
-          const chunk = await reader.read();
-          clearTimeout(timer);
-          timer = setTimeout(() => timeout.abort(new Error('ChatGPT 串流回應逾時。')), 120_000);
-          if (chunk.done) break;
-          for (const payload of frames.feed(decoder.decode(chunk.value, { stream: true }))) {
-            if (payload === '[DONE]') break read;
-            let raw: Record<string, any>;
-            try { raw = JSON.parse(payload); } catch { throw new Error('ChatGPT 串流格式不符，未記錄回應原文。'); }
-            // Transport metadata does not contribute output or complete an inference.
-            if (raw.type === 'response.metadata') continue;
-            if (raw.type === 'response.failed' || raw.type === 'error') {
-              const code = errorCode(raw.response ?? raw, 'response_failed');
-              const reason = failureReason(code, response.status);
-              if (BLOCKED.has(code)) this.onBlocked(subscriptionMessage(code), reason);
-              throw new ChatGPTError(reason, subscriptionMessage(code), attempts, assembly.snapshot(), origin, response.status, JSON.stringify({ error: { code } }));
-            }
-            if (raw.type === 'response.incomplete') {
-              const reason = raw.response?.incomplete_details?.reason;
-              const detail = reason === 'max_output_tokens' || reason === 'content_filter' ? `（${reason}）` : '';
-              throw new ChatGPTError('response', `ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, assembly.snapshot(), origin, response.status);
-            }
-            const event = subscriptionEvent(raw);
-            assembly.feed(event, event => options.onEvent?.(event));
-            if (event.type === 'response.completed' || event.type === 'response.incomplete') { terminal = true; break read; }
-          }
-        }
-        if (!terminal) throw new Error('ChatGPT 串流中斷，未收到完整回覆。');
-        phase = 'completion';
-        const result = assembly.finish();
-        attempt.responseId = result.id;
-        attempt.outcome = result.status === 'completed' ? 'completed' : 'incomplete';
-        if (result.status !== 'completed') {
-          const reason = result.incomplete_details?.reason;
-          const detail = reason === 'max_output_tokens' || reason === 'content_filter' ? `（${reason}）` : '';
-          throw new ChatGPTError('response', `ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, result, origin, response.status);
-        }
-        return { response: result, origin, attempts };
-      } catch (error) {
-        attempt.outcome = options.signal?.aborted ? 'aborted' : attempt.outcome;
-        if (error instanceof GenerationError) throw error;
-        const message = error instanceof ResponseProtocolError ? `ChatGPT 回應格式不符（${PROTOCOL_FAILURES.get(error.message) ?? 'response_protocol'}）。`
-          : error instanceof Error && error.message.startsWith('ChatGPT ') ? error.message : `ChatGPT 訂閱連線失敗（${phase}），未記錄原始錯誤內容。`;
-        const reason = timeout.signal.aborted || (error instanceof Error && error.name === 'TimeoutError') ? 'timeout'
-          : phase === 'authentication' ? 'authorization' : phase === 'request' && attempt.status === null ? 'network' : 'response';
-        throw new ChatGPTError(reason, message, attempts, assembly.snapshot(), origin, attempt.status ?? 0);
-      } finally {
-        clearTimeout(timer);
-        attempt.elapsedMs = Date.now() - started;
-        attempt.meters = assembly.meters();
-        attempt.serviceTier = assembly.serviceTier();
-        if (reader) { try { await reader.cancel(); } catch { /* Already closed. */ } reader.releaseLock(); }
-        attempts.push(attempt);
+    const assembly = new ChatGPTResponseAssembly();
+    const started = Date.now();
+    const attempt: ProviderAttempt = { id: randomUUID(), generationId, ordinal: 0, origin, startedAt: new Date().toISOString(), elapsedMs: 0,
+      requestId: null, responseId: null, outcome: 'failed', status: null, serviceTier: null, purpose: options.diagnostic ? 'diagnostic' : 'generation', meters: unknownMeters(), charges: [] };
+    const timeout = new AbortController();
+    const signals = [options.signal, this.session.signal?.(), timeout.signal].filter((signal): signal is AbortSignal => Boolean(signal));
+    const signal = AbortSignal.any(signals);
+    let timer = setTimeout(() => timeout.abort(new Error('ChatGPT 回應逾時。')), 300_000);
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let phase = 'authentication';
+    try {
+      signal.throwIfAborted();
+      const token = await this.session.token();
+      signal.throwIfAborted();
+      phase = 'request';
+      const response = await this.fetchImpl(`${CHATGPT_BASE_URL}/responses`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: bearerHeader(token.accessToken) },
+        body: requestJson(body), redirect: 'error', signal });
+      attempt.status = response.status;
+      attempt.requestId = response.headers.get('x-request-id');
+      if (!response.ok) {
+        let raw: unknown = null;
+        try { raw = await response.json(); } catch { /* Do not record upstream HTML or credentials. */ }
+        const code = errorCode(raw, `http_${response.status}`);
+        const reason = failureReason(code, response.status);
+        throw new ChatGPTError(reason, subscriptionMessage(code), attempts, null, origin, response.status, JSON.stringify({ error: { code } }));
       }
+      if (!response.body) throw new Error('ChatGPT 未回傳串流內容。');
+      phase = 'stream';
+      reader = response.body.getReader();
+      const frames = new EventDecoder();
+      const decoder = new TextDecoder();
+      let terminal = false;
+      read: for (;;) {
+        const chunk = await reader.read();
+        clearTimeout(timer);
+        timer = setTimeout(() => timeout.abort(new Error('ChatGPT 串流回應逾時。')), 120_000);
+        if (chunk.done) break;
+        for (const payload of frames.feed(decoder.decode(chunk.value, { stream: true }))) {
+          if (payload === '[DONE]') break read;
+          let raw: Record<string, any>;
+          try { raw = JSON.parse(payload); } catch { throw new Error('ChatGPT 串流格式不符，未記錄回應原文。'); }
+          // Transport metadata does not contribute output or complete an inference.
+          if (raw.type === 'response.metadata') continue;
+          if (raw.type === 'response.failed' || raw.type === 'error') {
+            const code = errorCode(raw.response ?? raw, 'response_failed');
+            const reason = failureReason(code, response.status);
+            throw new ChatGPTError(reason, subscriptionMessage(code), attempts, assembly.snapshot(), origin, response.status, JSON.stringify({ error: { code } }));
+          }
+          if (raw.type === 'response.incomplete') {
+            const reason = raw.response?.incomplete_details?.reason;
+            const detail = reason === 'max_output_tokens' || reason === 'content_filter' ? `（${reason}）` : '';
+            throw new ChatGPTError('response', `ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, assembly.snapshot(), origin, response.status);
+          }
+          const event = subscriptionEvent(raw);
+          assembly.feed(event, event => options.onEvent?.(event));
+          if (event.type === 'response.completed' || event.type === 'response.incomplete') { terminal = true; break read; }
+        }
+      }
+      if (!terminal) throw new Error('ChatGPT 串流中斷，未收到完整回覆。');
+      phase = 'completion';
+      const result = assembly.finish();
+      attempt.responseId = result.id;
+      attempt.outcome = result.status === 'completed' ? 'completed' : 'incomplete';
+      if (result.status !== 'completed') {
+        const reason = result.incomplete_details?.reason;
+        const detail = reason === 'max_output_tokens' || reason === 'content_filter' ? `（${reason}）` : '';
+        throw new ChatGPTError('response', `ChatGPT 回覆未完成${detail}，未執行工具。`, attempts, result, origin, response.status);
+      }
+      return { response: result, origin, attempts };
+    } catch (error) {
+      attempt.outcome = options.signal?.aborted ? 'aborted' : attempt.outcome;
+      const message = error instanceof ResponseProtocolError ? `ChatGPT 回應格式不符（${PROTOCOL_FAILURES.get(error.message) ?? 'response_protocol'}）。`
+        : error instanceof Error && error.message.startsWith('ChatGPT ') ? error.message : `ChatGPT 訂閱連線失敗（${phase}），未記錄原始錯誤內容。`;
+      const reason = timeout.signal.aborted || (error instanceof Error && error.name === 'TimeoutError') ? 'timeout'
+        : phase === 'authentication' ? 'authorization' : phase === 'request' && attempt.status === null ? 'network' : 'response';
+      const failure = error instanceof ChatGPTError ? error : new ChatGPTError(reason, message, attempts, assembly.snapshot(), origin, attempt.status ?? 0);
+      if (!options.signal?.aborted && !this.session.signal?.()?.aborted) this.onBlocked(failure.message, failure.reason);
+      throw failure;
+    } finally {
+      clearTimeout(timer);
+      attempt.elapsedMs = Date.now() - started;
+      attempt.meters = assembly.meters();
+      attempt.serviceTier = assembly.serviceTier();
+      if (reader) { try { await reader.cancel(); } catch { /* Already closed. */ } reader.releaseLock(); }
+      attempts.push(attempt);
     }
-    throw new ChatGPTError('authorization', 'ChatGPT 登入無法使用，請重新登入。', attempts, null, origin, 401);
   }
 }

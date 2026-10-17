@@ -245,6 +245,7 @@ const fr: Translation<PetText> = {
     voice: 'Saisie vocale',
     enable: 'Activer la saisie vocale',
     enabledHint: "Le micro reste ouvert ; ce que vous dites va à Coo selon le mode d'écoute",
+    enabledHintOnPress: "Le micro s'ouvre tant que la touche de parole est maintenue et se ferme au relâchement",
     disabledHint: 'Désactivée : le micro reste fermé, et les réglages ci-dessous attendent',
     engine: 'Moteur de reconnaissance',
     funasr: 'FunASR (sur cet ordinateur)',
@@ -273,6 +274,10 @@ const fr: Translation<PetText> = {
     micN: (n: number) => `Micro ${n}`,
     mode: "Mode d'écoute",
     modes: { hold: 'Tant que la touche de parole est maintenue', toggle: "La touche de parole l'active et la désactive", always: 'En continu' },
+    openOnPress: "N'ouvrir le micro que pendant l'appui",
+    openOnPressHint: "Pour les casques, Bluetooth par exemple, qui passent en mode appel quand le micro est ouvert ; après l'appui, attendez un instant avant de parler, sinon les premiers mots peuvent manquer",
+    switchOn: 'Activé',
+    switchOff: 'Désactivé',
     presses: {
       2: { hold: 'Double appui puis maintien', toggle: 'Double appui pour commencer, encore pour arrêter' },
       1: { hold: 'Simple maintien', toggle: 'Appui pour commencer, nouvel appui pour arrêter' },

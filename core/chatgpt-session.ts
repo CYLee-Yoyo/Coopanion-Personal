@@ -1,6 +1,14 @@
 /** The Core requests credentials over its parent IPC; public state contains no tokens. */
 import { randomUUID } from 'node:crypto';
+import type { Core } from 'cortico/core/core.ts';
+import type { CoreConfig } from 'cortico/core/types.ts';
 import type { ChatGPTSession, ChatGPTStatus } from 'cortico-provider-coo/src/chatgpt/types.ts';
+
+/** Pausing delivery and interrupting the round also prevents Core's within-batch resubmission. */
+export function suspendChatGPT(core: Pick<Core<CoreConfig>, 'bus' | 'loop'>): void {
+  core.bus.setPaused(true);
+  core.loop.interruptCurrentRound();
+}
 
 export function createChatGPTSession(onState: (state: ChatGPTStatus) => void): ChatGPTSession {
   let status: ChatGPTStatus = { connected: false, sharing: false, pending: false, email: null, account: null, error: null };

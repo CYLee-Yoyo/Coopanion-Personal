@@ -1,11 +1,11 @@
 /** Public upstream baseline and the personal features that require review during an upgrade. */
 export const UPSTREAM_BASE = {
-  version: '0.1.27', commit: '65c944667a4874d6eacee08ea7252b4afd64f159',
-  corticoCommit: '9469daf42cd427b230441a80219b0466dc02488c',
+  version: '0.2.3', commit: '6ddb1341befea9bad94bb48ed5b1cb998da77fd1',
+  corticoCommit: '786b79a98041a8d93f6b53b4eb1b86fe71240151',
 } as const;
 
 export const PERSONAL_FEATURES = [
-  { id: 'subscription', paths: ['packages/cortico-provider-coo/src/chatgpt/', 'packages/cortico-provider-coo/src/connect.ts', 'core/chatgpt-session.ts'], description: 'ChatGPT subscription transport, complete streamed responses, transport metadata filtering, no paid API fallback, and stopping on quota or authorization failure.' },
+  { id: 'subscription', paths: ['packages/cortico-provider-coo/src/chatgpt/', 'packages/cortico-provider-coo/src/connect.ts', 'core/chatgpt-session.ts', 'core/companion.ts'], description: 'ChatGPT subscription transport, complete streamed responses, transport metadata filtering and no paid API fallback. Each inference is attempted once; any subscription failure pauses delivery and interrupts the current round to prevent Core resubmission. Recovery and failed-release analysis retries require explicit user actions.' },
   { id: 'credentials', paths: ['app/chatgpt-auth.cjs', 'app/main.cjs', 'core/chatgpt-session.ts'], description: 'Encrypted credentials in Electron main, private IPC, cancellation and sign-out guards, and rejection of redirects and raw error bodies.' },
   { id: 'models', paths: ['console/features/home/', 'console/companion.css', 'console/base/'], description: 'Immediate model persistence, account-specific catalog, themed model popup, and readable primary-button text.' },
   { id: 'computerUse', paths: ['console/features/cua/', 'console/features/pet/', 'packages/cortico-world-desktop-pet/src/cua/',

@@ -23,6 +23,13 @@ describe('releaseNotes', () => {
     expect(releaseNotes(dir, null, '0.1.13').map((n) => n.version)).toEqual(['0.1.13']);
   });
 
+  it('reads the upstream release range between personal builds', () => {
+    const dir = releases(['0.1.27', '0.2.0', '0.2.1', '0.2.2', '0.2.3', '0.2.4']);
+    expect(releaseNotes(dir, '0.1.27-personal.1', '0.2.3-personal.1').map((n) => n.version))
+      .toEqual(['0.2.0', '0.2.1', '0.2.2', '0.2.3']);
+    expect(releaseNotes(dir, null, '0.2.3-preview.1')).toEqual([]);
+  });
+
   it('reads a version\'s English notes for English model text, its Chinese ones where there are none, each without its download list', () => {
     const dir = releases(['0.1.12', '0.1.13']);
     writeFileSync(join(dir, 'v0.1.13.en.md'), '# Coopanion v0.1.13\n\nThis release 0.1.13\n\n## Download\n\n- installer 0.1.13\n');

@@ -24,8 +24,8 @@ importers:
         specifier: 6.2.12
         version: 6.2.12
       pnpm:
-        specifier: 11.5.0
-        version: 11.5.0
+        specifier: 11.28.6
+        version: 11.28.6
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
@@ -2263,8 +2263,8 @@ packages:
     resolution: {integrity: sha512-uysumyrvkUX0rX/dEVqt8gC3sTBzd4zoWfLeS29nb53imdaXVvLINYXTI2GNqzaMuvacNx4uJQ8+b3zXR0pkgQ==}
     engines: {node: '>=10.4.0'}
 
-  pnpm@11.5.0:
-    resolution: {integrity: sha512-2/zE+Bz0hZev1Lw5H/3xLBHxqfuDo5W/prCi2cwv2P/rr9scy9UpYyFT95OQTCYVt/Cf4aNFRz/Rw1hFFyqOsQ==}
+  pnpm@11.28.6:
+    resolution: {integrity: sha512-VdkDkMOzkELxUFoml3ifAlbG2Vuyi918tzGvGIfJ8mKe9YGsufTk7HcgJMggPCrtIqAymblxA/3PMmaOkF0AJA==}
     engines: {node: '>=22.13'}
     hasBin: true
 
@@ -4940,7 +4940,7 @@ snapshots:
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 
-  pnpm@11.5.0: {}
+  pnpm@11.28.6: {}
 
   postcss@8.5.28:
     dependencies:

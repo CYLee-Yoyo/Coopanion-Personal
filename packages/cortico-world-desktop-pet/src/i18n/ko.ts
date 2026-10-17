@@ -245,6 +245,7 @@ const ko: Translation<PetText> = {
     voice: '음성 입력',
     enable: '음성 입력 켜기',
     enabledHint: '마이크가 계속 열려 있고, 말한 내용은 듣는 방식에 따라 Coo에게 전달됩니다',
+    enabledHintOnPress: '말하기 키를 누르는 동안만 마이크를 열고, 떼면 닫습니다',
     disabledHint: '꺼짐: 마이크는 닫혀 있고 아래 설정은 대기합니다',
     engine: '인식 엔진',
     funasr: 'FunASR(이 컴퓨터에서 인식)',
@@ -273,6 +274,10 @@ const ko: Translation<PetText> = {
     micN: (n: number) => `마이크 ${n}`,
     mode: '듣는 방식',
     modes: { hold: '말하기 키를 누르고 있는 동안', toggle: '말하기 키로 켜고 끄기', always: '항상' },
+    openOnPress: '누르고 있을 때만 마이크 열기',
+    openOnPressHint: '마이크를 열면 통화 모드로 바뀌는 블루투스 이어폰 등에 쓰며, 누른 뒤 잠시 기다렸다가 말하지 않으면 첫마디가 빠질 수 있습니다',
+    switchOn: '켜짐',
+    switchOff: '꺼짐',
     presses: {
       2: { hold: '두 번 누른 뒤 누르고 있기', toggle: '두 번 눌러 시작, 다시 두 번 눌러 멈춤' },
       1: { hold: '그냥 누르고 있기', toggle: '눌러서 시작, 다시 눌러 멈춤' },

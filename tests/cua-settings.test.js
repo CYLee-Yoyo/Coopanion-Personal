@@ -40,7 +40,7 @@ async function fixture() {
         envPromptVars: () => ({ enabled: String(live.cua.enabled), control: String(live.cua.control), permission: live.cua.permission, grant: String(live.cua.grantMinutes) }),
         tools: () => live.cua.enabled ? [{ name: 'fixture_computer', description: 'Read the fixture.', tags: ['read'],
           parameters: { type: 'object', properties: {}, required: [] }, handler: async () => { actions++; return 'fixture read'; } }] : [],
-        console: () => ({ promptDocs: [{ key: 'worlds.desktop-pet.envPrompt', title: 'fixture', description: 'fixture', path: template, role: 'envPrompt' }] }),
+        webUi: () => ({ promptDocs: [{ key: 'worlds.desktop-pet.envPrompt', title: 'fixture', description: 'fixture', path: template, role: 'envPrompt' }] }),
         start: async next => { host = next; }, stop: async () => {},
       };
     },

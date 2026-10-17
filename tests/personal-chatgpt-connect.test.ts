@@ -3,13 +3,13 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { ProviderRegistry } from 'cortico/providers/registry.ts';
-import { ProviderSettings } from 'cortico/providers/console/settings.ts';
+import { ProviderSettings } from 'cortico/providers/webui/settings.ts';
 import { nullLogger } from 'cortico/core/util.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
 import type { CoreConfig } from 'cortico/core/types.ts';
 import { createChatGPTModule } from '../packages/cortico-provider-coo/src/chatgpt/index.ts';
 import { CHATGPT_BASE_URL, CHATGPT_ENDPOINT, CHATGPT_KIND, type ChatGPTSession, type ChatGPTStatus } from '../packages/cortico-provider-coo/src/chatgpt/types.ts';
-import { chatgptState, connectChatGPT, signOutChatGPT, type ConsoleCall } from '../packages/cortico-provider-coo/src/connect.ts';
+import { chatgptState, connectChatGPT, signOutChatGPT, type WebUiCall } from '../packages/cortico-provider-coo/src/connect.ts';
 
 const cleanups: Array<() => void> = [];
 afterEach(() => { cleanups.splice(0).reverse().forEach(cleanup => cleanup()); vi.unstubAllGlobals(); });
@@ -45,7 +45,7 @@ function fixture(testOk = true, sharing = false) {
     if (String(url) !== `${CHATGPT_BASE_URL}/models`) throw new Error('Unexpected network request');
     return new Response(JSON.stringify({ models: [{ slug: 'fixture-first', visibility: 'list' }, { slug: 'fixture-second', visibility: 'list' }] }), { headers: { 'Content-Type': 'application/json' } });
   });
-  const call: ConsoleCall = async <T>(path: string, body?: unknown): Promise<T> => {
+  const call: WebUiCall = async <T>(path: string, body?: unknown): Promise<T> => {
     if (path.includes('/panels/auth/')) return contribution.invoke!('auth', path.split('/').at(-1)!, (body as { args: unknown[] }).args) as Promise<T>;
     if (path === '/api/providers') return { providers: Object.keys(cfg.providers).map(name => ({ name })) } as T;
     if (path === `/api/providers/${CHATGPT_ENDPOINT}`) return { name: CHATGPT_ENDPOINT, entry: cfg.providers[CHATGPT_ENDPOINT] } as T;
