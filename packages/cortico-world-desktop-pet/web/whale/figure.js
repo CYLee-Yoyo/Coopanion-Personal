@@ -460,7 +460,7 @@ export async function createWhaleFigure(base = new URL('./', import.meta.url), o
   // moves her head instead. Only flight, dragging and the jump's crouch and landing tip the whole group,
   // running keeps half its lean. The shares ease between modes so the group never snaps.
   // dancing sways her mostly as a whole, the rest of the sway goes to the neck
-  const GROUP = { air: [1, 1], drag: [1, 1], crouch: [1, 1], 'descend-crouch': [1, 1], land: [1, 1], walk: [1, .5], 'climb-walk': [1, .5], 'descend-walk': [1, .5],
+  const GROUP = { air: [1, 1], drag: [1, 1], crouch: [1, 1], 'perch-crouch': [1, 1], 'descend-crouch': [1, 1], land: [1, 1], walk: [1, .5], 'climb-walk': [1, .5], 'perch-walk': [1, .5], 'descend-walk': [1, .5],
     climb: [.5, .3], mantle: [.5, .5], run: [1, .5], dance: [.6, 0] };
   // the ninja run leans her whole body forward from the soles, in a straight line: bent at the waist instead,
   // the bodice comes away from the skirt and its bow and the tops of the legs show at the waist
@@ -527,7 +527,7 @@ export async function createWhaleFigure(base = new URL('./', import.meta.url), o
     lastT = t;
     const mode = o.mode || 'idle', face = o.face || 'neutral';
     facing = Math.sign(o.facing || 1);
-    const walking = mode === 'walk' || mode === 'run' || mode === 'climb-walk' || mode === 'descend-walk', held = mode === 'drag', airborne = mode === 'air';
+    const walking = mode === 'walk' || mode === 'run' || mode === 'climb-walk' || mode === 'perch-walk' || mode === 'descend-walk', held = mode === 'drag', airborne = mode === 'air';
 
     /* body: the kit's `low` is how far the hips sink (sitting, the walk's bob), in these units */
     sitK = lerp(sitK, clamp(o.sit ?? 0, 0, 1), ease(12, dt));

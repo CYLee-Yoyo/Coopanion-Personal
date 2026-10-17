@@ -94,8 +94,8 @@ const FACE_TONES = {
 };
 /** Body modes in which the figure travels across the stage or squashes fast (dancing steps and sways on the spot). */
 const CLIMB_MODES = new Set(['climb-walk', 'climb', 'mantle']);
-const DESCENT_MODES = new Set(['descend-walk', 'descend-crouch']);
-const MOVING_MODES = new Set(['drag', 'air', 'crouch', 'land', 'walk', 'run', 'dance', ...CLIMB_MODES, ...DESCENT_MODES]);
+const DEPARTURE_MODES = new Set(['descend-walk', 'descend-crouch', 'perch-walk', 'perch-crouch']);
+const MOVING_MODES = new Set(['drag', 'air', 'crouch', 'land', 'walk', 'run', 'dance', ...CLIMB_MODES, ...DEPARTURE_MODES]);
 /** Points on the body in logo units, for a figure that names none: where the eyes look from, where a tear starts,
  *  where z's and hearts start ([x from, x to, y]), the bubble's spot. `tears` (one start under each eye) has no default. */
 const ANCHORS = { gaze: [140, 117], tear: [166, 136], z: [196, 40], hearts: [90, 175, 34], bubble: [128, 0] };
@@ -202,10 +202,10 @@ export function createPet(els, opts) {
       }
     }
     if (departure) {
-      const plan = descentPlans().find(p => p.side === departure.side);
+      const plan = departurePlan();
       if (plan) {
         pet.target = plan.x;
-        if (pet.mode === 'descend-crouch' && Math.abs(pet.x - plan.x) > 2) setMode('descend-walk');
+        if (pet.mode.endsWith('-crouch') && Math.abs(pet.x - plan.x) > 2) setMode(departure.surfaceId ? 'perch-walk' : 'descend-walk');
       }
       else cancelDeparture();
     }
@@ -236,7 +236,7 @@ export function createPet(els, opts) {
     const prev = pet.mode;
     if (m === 'air' || m === 'drag' || m === 'climb' || m === 'mantle') support = null;
     if (!CLIMB_MODES.has(m)) climb = null;
-    if (!DESCENT_MODES.has(m)) departure = null;
+    if (!DEPARTURE_MODES.has(m)) departure = null;
     // an arrival clears walkId before going idle, so anything else that ends a walk (a turn, a bow, listening) cuts it short
     if ((prev === 'walk' || prev === 'run') && pet.walkId) {
       onEvent('interrupted', { walkId: pet.walkId, x: Math.round(pet.x), by: m });
@@ -249,7 +249,7 @@ export function createPet(els, opts) {
     if (prev !== m) onEvent('mode', { mode: m });
   }
   const busy = () => pet.mode === 'drag' || pet.mode === 'air' || pet.mode === 'crouch'
-    || CLIMB_MODES.has(pet.mode) || DESCENT_MODES.has(pet.mode);
+    || CLIMB_MODES.has(pet.mode) || DEPARTURE_MODES.has(pet.mode);
   function pickTarget(minDist) {
     for (let i = 0; i < 12; i++) {
       const x = rnd(minX(), maxX());
@@ -401,7 +401,10 @@ export function createPet(els, opts) {
       pet.lastAct = 'perch'; pet.expr = null;
       pet.facing = Math.sign(plan.jumpVx) || pet.facing;
       perchAt = T + (calm ? 45 : 20);
-      setMode('crouch', plan);
+      if (support) {
+        departure = { side: plan.side, surfaceId: plan.surfaceId };
+        setMode('perch-walk', { target: plan.x });
+      } else setMode('crouch', plan);
     }
     else if (pick === 'look') { setMode('look'); pet.lastAct = 'look'; }
     else if (pick === 'expr') { setExpr(['happy', 'wink', 'love', 'sleepy', 'surprised', 'shy'][Math.floor(Math.random() * 6)]); pet.lastAct = 'expr'; }
@@ -432,7 +435,7 @@ export function createPet(els, opts) {
 
   function descentPlans() {
     if (!support) return [];
-    const height = Math.min(28, pet.fy - 250 * S - 12);
+    const height = Math.min(28, support.y - 250 * S - 12);
     if (height <= 0) return [];
     const jumpV = Math.sqrt(2 * 2300 * height), seconds = 2 * jumpV / 2300;
     return [-1, 1].flatMap(side => {
@@ -443,23 +446,48 @@ export function createPet(els, opts) {
       return Math.abs(jumpVx) <= 650 ? [{ side, x, jumpV, jumpVx }] : [];
     });
   }
+  function departurePlan() {
+    return (departure.surfaceId ? perchPlans() : descentPlans())
+      .find(p => p.side === departure.side && p.surfaceId === departure.surfaceId);
+  }
   function cancelDeparture() { setMode('idle'); pet.speed = 0; pet.nextAt = T + 3; }
 
   function perchPlans() {
-    const targets = surfaces.filter(s => s.id !== support?.id && s.y < pet.fy - 12)
+    const fromY = support?.y ?? pet.fy;
+    const targets = surfaces.filter(s => s.id !== support?.id && (support || s.y < fromY - 12))
       .flatMap(s => {
-        const left = Math.max(stageMinX(), s.x + footMargin() + 8);
-        const right = Math.min(stageMaxX(), s.x + s.width - footMargin() - 8);
-        return left <= right ? [{ x: clamp(pet.x, left, right), y: s.y }] : [];
+        const inset = support ? 32 : 8;
+        const left = Math.max(stageMinX(), s.x + footMargin() + inset);
+        const right = Math.min(stageMaxX(), s.x + s.width - footMargin() - inset);
+        if (!support) return left <= right ? [{ fromX: pet.x, x: clamp(pet.x, left, right), surface: s }] : [];
+        return [-1, 1].flatMap(side => {
+          const fromX = clamp(side === -1 ? minX() + 8 : maxX() - 8, minX(), maxX());
+          const edge = s.y >= fromY ? support.x + (side === 1 ? support.width : 0) : fromX;
+          const reach = edge + side * (footMargin() + 16);
+          const a = side === 1 ? Math.max(left, reach) : left;
+          const b = side === -1 ? Math.min(right, reach) : right;
+          return a <= b ? [{ fromX, x: clamp(fromX, a, b), side, surface: s }] : [];
+        });
       });
     return targets.flatMap(target => {
-      const rise = pet.fy - target.y;
-      const height = Math.min(Math.max(0, rise) + 48, pet.fy - 250 * S - 12);
+      const rise = fromY - target.surface.y;
+      const height = Math.min(Math.max(0, rise) + 48, fromY - 250 * S - 12);
       if (height <= rise || height <= 0) return [];
       const jumpV = Math.sqrt(2 * 2300 * height);
       const seconds = (jumpV + Math.sqrt(jumpV * jumpV - 2 * 2300 * rise)) / 2300;
-      const jumpVx = (target.x - pet.x) * .4 / (1 - Math.exp(-.4 * seconds));
-      if (Math.abs(jumpVx) > 650 || Math.abs(target.x - pet.x) > 600) return [];
+      const jumpVx = (target.x - target.fromX) * .4 / (1 - Math.exp(-.4 * seconds));
+      if (Math.abs(jumpVx) > 650 || Math.abs(target.x - target.fromX) > 600) return [];
+      if (support) {
+        // Leave clearance for the frame-step error when crossing an intervening ledge.
+        const blocked = surfaces.some(s => {
+          if (s === target.surface || s.y > target.surface.y || s.y < fromY - height) return false;
+          const t = (jumpV + Math.sqrt(jumpV * jumpV - 2 * 2300 * (fromY - s.y))) / 2300;
+          const x = target.fromX + jumpVx * (1 - Math.exp(-.4 * t)) / .4;
+          return x >= s.x + footMargin() - 16 && x <= s.x + s.width - footMargin() + 16;
+        });
+        if (blocked) return [];
+        return [{ x: target.fromX, side: target.side, surfaceId: target.surface.id, jumpV, jumpVx }];
+      }
       return [{ jumpV, jumpVx }];
     });
   }
@@ -512,7 +540,7 @@ export function createPet(els, opts) {
         if (free && !pet.listening && T > pet.nextAt && !(pet.expr && T < pet.exprUntil)) decide();
         break;
       }
-      case 'descend-walk': case 'climb-walk': case 'walk': case 'run': {
+      case 'perch-walk': case 'descend-walk': case 'climb-walk': case 'walk': case 'run': {
         const run = m === 'run', d = pet.target - pet.x, dist = Math.abs(d), dir = Math.sign(d) || pet.facing;
         pet.facing = dir;
         const vMax = run ? 250 : 78;
@@ -540,9 +568,9 @@ export function createPet(els, opts) {
             setMode('climb');
             break;
           }
-          if (m === 'descend-walk') {
-            const plan = descentPlans().find(p => p.side === departure.side);
-            if (plan) { pet.facing = plan.side; setMode('descend-crouch'); }
+          if (m === 'descend-walk' || m === 'perch-walk') {
+            const plan = departurePlan();
+            if (plan) { pet.facing = plan.side; setMode(m === 'perch-walk' ? 'perch-crouch' : 'descend-crouch'); }
             else cancelDeparture();
             break;
           }
@@ -610,14 +638,14 @@ export function createPet(els, opts) {
         }
         break;
       }
-      case 'descend-crouch': case 'crouch': {
+      case 'perch-crouch': case 'descend-crouch': case 'crouch': {
         sqT = .24; sitT = .3;
         if (m === 'descend-crouch') { lookT = [4, 4]; leanT = 6; }
         if (mt > .16) {
-          if (m === 'descend-crouch') {
-            const plan = descentPlans().find(p => p.side === departure.side);
+          if (departure) {
+            const plan = departurePlan();
             if (!plan) { cancelDeparture(); break; }
-            if (Math.abs(pet.x - plan.x) > 2) { setMode('descend-walk', { target: plan.x }); break; }
+            if (Math.abs(pet.x - plan.x) > 2) { setMode(m === 'perch-crouch' ? 'perch-walk' : 'descend-walk', { target: plan.x }); break; }
             pet.jumpV = plan.jumpV; pet.jumpVx = plan.jumpVx;
           }
           pet.vy = -pet.jumpV; pet.vx = pet.jumpVx; pet.airKind = 'jump'; pet.sqv -= 2.6;
@@ -740,7 +768,7 @@ export function createPet(els, opts) {
     pet.gap[1] = lerp(pet.gap[1], fc.gap[1], ease(8, dt));
     // turning reads as a quick card flip rather than a mirror snap
     pet.faceVis = lerp(pet.faceVis, pet.facing, ease(15, dt));
-    if (!['walk', 'run', 'dance', 'climb-walk', 'descend-walk', 'climb'].includes(m)) pet.phase = lerp(pet.phase, Math.round(pet.phase / Math.PI) * Math.PI, ease(6, dt));
+    if (!['walk', 'run', 'dance', 'climb-walk', 'descend-walk', 'perch-walk', 'climb'].includes(m)) pet.phase = lerp(pet.phase, Math.round(pet.phase / Math.PI) * Math.PI, ease(6, dt));
     pointer.vx *= Math.exp(-dt * 6);
 
     // secondary motion for ears/antenna/scarf: lags behind horizontal movement
@@ -1114,7 +1142,7 @@ export function createBody(host, opts) {
     shift: ctl.shiftDrag,
     /** Puts a body that is standing at stage x, turned to `facing` (1 right, -1 left). */
     place(x, facing) {
-      if (ctl.pet.mode === 'drag' || ctl.pet.mode === 'air' || CLIMB_MODES.has(ctl.pet.mode) || DESCENT_MODES.has(ctl.pet.mode)) return;
+      if (ctl.pet.mode === 'drag' || ctl.pet.mode === 'air' || CLIMB_MODES.has(ctl.pet.mode) || DEPARTURE_MODES.has(ctl.pet.mode)) return;
       const { minX, maxX } = ctl.bounds;
       ctl.pet.x = ctl.pet.target = clamp(x, minX, maxX);
       if (facing === 1 || facing === -1) ctl.pet.facing = ctl.pet.faceVis = facing;

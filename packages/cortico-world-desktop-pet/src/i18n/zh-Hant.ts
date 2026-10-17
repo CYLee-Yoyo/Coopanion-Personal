@@ -193,7 +193,7 @@ const zhHant: Translation<PetText> = {
     glow: { title: '外發光', description: '桌寵和身後的顏色相近時，身體周圍出現的淺色外發光向外延伸多少像素；0 為關閉。' },
     frameRate: { title: '幀率', description: '走動、被拎著、跳起時每秒畫幾幀；0 跟隨螢幕更新率。超過螢幕更新率時以螢幕的為準。「習慣」頁可選 60、120、144 和不限。' },
     lockFrameRate: { title: '幀率鎖定', description: '靜止時也依「幀率」繪製桌寵。關閉時站著、坐著、睡著會降到每秒 30 幀。' },
-    perchWindows: { title: "站在視窗頂端", description: "可拖到空間足夠的一般視窗頂端，也會依走動設定跳上、從邊緣躍下，或沿可觸及且未被遮住的側邊爬上。跟隨視窗位置，支撐消失時落下。只讀取視窗邊界，不讀取標題或畫面，不移動視窗或切換焦點。" },
+    perchWindows: { title: "站在視窗頂端", description: "可拖到空間足夠的一般視窗頂端，也會依走動設定跳上、從邊緣躍下、跳到鄰近視窗，或沿可觸及且未被遮住的側邊爬上。跟隨視窗位置，支撐消失時落下。只讀取視窗邊界，不讀取標題或畫面，不移動視窗或切換焦點。" },
     hideWhenFullscreen: { title: '全螢幕時自動隱藏', description: '開啟時，前景視窗以全螢幕鋪滿桌寵所在的那個螢幕（遊戲、全螢幕影片、瀏覽器全螢幕）就把它藏起來，離開全螢幕後再放回來；最大化的視窗不算。關閉時一律浮在最上層。' },
     exportOverlay: { title: 'OBS 畫面', description: '在 /overlay 提供桌寵視窗的透明畫面，供 OBS「瀏覽器」來源使用；關閉時不提供。' },
     electronFile: { title: 'Electron 程式', description: '留空時依序使用 CORTICO_DESKTOP_PET_HOST 和面板裡安裝的執行環境。' },

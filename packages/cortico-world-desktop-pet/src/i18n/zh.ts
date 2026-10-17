@@ -216,7 +216,7 @@ export default {
     glow: { title: '外发光', description: '桌宠和身后的颜色相近时，身体周围出现的浅色外发光向外延伸多少像素；0 为关闭。' },
     frameRate: { title: '帧率', description: '走动、被拎着、跳起时每秒画多少帧；0 跟随显示器刷新率。超过显示器刷新率时按显示器的。「习惯」页可选 60、120、144 和不限。' },
     lockFrameRate: { title: '帧率锁定', description: '静止时也按「帧率」画桌宠。关着时站着、坐着、睡着降到每秒 30 帧。' },
-    perchWindows: { title: "站在窗口顶端", description: "可拖到空间足够的普通窗口顶端，也会按走动设置跳上、从边缘跃下，或沿可触及且未被遮住的侧边爬上。跟随窗口位置，支撑消失时落下。只读取窗口边界，不读取标题或画面，不移动窗口或切换焦点。" },
+    perchWindows: { title: "站在窗口顶端", description: "可拖到空间足够的普通窗口顶端，也会按走动设置跳上、从边缘跃下、跳到邻近窗口，或沿可触及且未被遮住的侧边爬上。跟随窗口位置，支撑消失时落下。只读取窗口边界，不读取标题或画面，不移动窗口或切换焦点。" },
     hideWhenFullscreen: { title: '全屏时自动隐藏', description: '开着时，前台窗口全屏铺满桌宠所在的那块屏（游戏、全屏视频、浏览器全屏）就把它藏起来，退出全屏放回来；最大化的窗口不算。关着时一直浮在上面。' },
     exportOverlay: { title: 'OBS 画面', description: '在 /overlay 提供桌宠窗口的透明画面，供 OBS「浏览器」来源使用；关闭时不提供。' },
     electronFile: { title: 'Electron 程序', description: '留空时依次用 CORTICO_DESKTOP_PET_HOST 和面板里安装的运行时。' },
