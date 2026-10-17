@@ -18,6 +18,8 @@ The Windows personal installation records its physical data directory in `person
 
 The personal build checks public stable releases every six hours while open. The **Upstream updates** page compares the public upstream baseline with the latest release using the selected ChatGPT subscription model, once per release. Future reviews include window-top interaction under desktop interaction and permissions; existing reports remain available. Local source, credentials and conversations are excluded from these requests. The pet offers the report, a saved request for manual integration in Codex, or a persistent skip. It never installs an update or switches to paid API credentials. Installation and personal data remain separate from the source checkout.
 
+The page shows failure reasons and recovery steps for usage restrictions, sign-in or permission problems, network errors, timeouts and invalid responses. Usage restrictions prompt a check of the app’s plan-usage permission and limit; they do not establish that the entire plan is exhausted. Failure reasons survive navigation and restart; retrying an attempted review requires a manual action. Older records without details show an unknown reason. Raw service error text is excluded from update state.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">

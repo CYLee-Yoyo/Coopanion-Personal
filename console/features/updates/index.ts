@@ -18,6 +18,8 @@ export async function mountUpdates(ctx: PageContext): Promise<void> {
   const status = ui.msgline('');
   status.setAttribute('aria-live', 'polite');
   const failure = ui.msgline('', true);
+  const reason = ui.msgline('', true);
+  reason.setAttribute('aria-live', 'polite');
   const enabled = ui.checkbox(S.enabled, { onChange: on => void act('enabled', [on]) });
   const check = ui.button(S.check, { variant: 'primary', onClick: () => void act('check') });
   const retry = ui.button(S.retry, { onClick: () => void act('retry') });
@@ -26,7 +28,7 @@ export async function mountUpdates(ctx: PageContext): Promise<void> {
   const controls = ui.rowbar();
   controls.append(enabled.el, retry);
   const meta = ui.h('dl', 'upstream-meta');
-  settings.body.append(controls, status, failure, meta, ui.h('p', 'home-note', S.scope));
+  settings.body.append(controls, status, reason, failure, meta, ui.h('p', 'home-note', S.scope));
   root.append(settings.el);
   const reportBox = ui.h('div');
   root.append(reportBox);
@@ -126,6 +128,9 @@ export async function mountUpdates(ctx: PageContext): Promise<void> {
     retry.disabled = busy || !state.enabled;
     status.textContent = S.phases[state.phase];
     status.classList.toggle('bad', state.phase === 'failed' || state.phase === 'interrupted');
+    const detail = ['checking', 'analyzing'].includes(state.phase) ? null : state.failure ?? (state.error === 'analysis' ? 'unknown' : state.error);
+    reason.textContent = detail ? S.failures[detail] : '';
+    reason.hidden = !reason.textContent;
     meta.replaceChildren();
     const date = (at: number | null) => at === null ? S.none : new Date(at).toLocaleString();
     for (const [label, value] of [[S.installed, state.installedVersion], [S.baseline, state.baseline],
