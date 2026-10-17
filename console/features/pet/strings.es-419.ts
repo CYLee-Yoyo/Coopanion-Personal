@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   lockFpsHint: 'También dibuja a la velocidad de arriba en reposo; si está desactivado, en reposo baja a 30 fotogramas por segundo.',
   perchWindowsLabel: "Interacción con ventanas",
   perchWindows: "Pararse sobre ventanas",
-  perchWindowsHint: "Arrastra la mascota sobre una ventana normal con espacio suficiente o deja que salte hacia arriba, baje de un salto desde un borde o trepe por un lado accesible y despejado según su ajuste de movimiento. Sigue la ventana y cae si desaparece el apoyo. Solo lee los límites, sin leer títulos ni contenido, mover ventanas o cambiar el foco.",
+  perchWindowsHint: "Arrastra la mascota sobre una ventana normal con espacio suficiente o deja que salte hacia arriba, baje de un salto desde un borde, salte entre ventanas cercanas o trepe por un lado accesible y despejado según su ajuste de movimiento. Sigue la ventana y cae si desaparece el apoyo. Solo lee los límites, sin leer títulos ni contenido, mover ventanas o cambiar el foco.",
   hideFullscreen: 'Ocultar automáticamente',
   hideFullscreenHint: 'Se oculta mientras algo está en pantalla completa y vuelve después. Una ventana maximizada no cuenta.',
   soundTitle: 'Sonidos',
